@@ -33,7 +33,8 @@
       if (a && b) { links.push({ a, b, w: l.weight || 1 }); a.deg++; b.deg++; }
     }
     const REP = P.rep || 900, SPRING = 0.012, REST = P.rest || 11, CENTER = 0.004, DT = 0.55;
-    for (let it = 0; it < iterations; it++) {
+    const ITER = 260;
+    for (let it = 0; it < ITER; it++) {
       // repulsion (capped, skip far pairs)
       for (let i = 0; i < nodes.length; i++) {
         const a = nodes[i];
