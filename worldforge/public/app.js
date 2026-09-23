@@ -419,21 +419,34 @@
       }));
     }
 
-    // generic autocomplete: shared by card search and battlefield add
+    // generic autocomplete: shared by card search and battlefield add.
+    // ARIA combobox pattern: the input owns a listbox popup; options carry
+    // their name and selected state for screen readers.
+    let acSeq = 0;
     function attachAC(input, popup, onPick) {
+      const listId = popup.id || 'mtg-ac-list-' + (++acSeq);
+      if (!popup.id) popup.id = listId;
+      popup.setAttribute('role', 'listbox');
+      popup.setAttribute('aria-label', 'Card suggestions');
+      input.setAttribute('role', 'combobox');
+      input.setAttribute('aria-expanded', 'false');
+      input.setAttribute('aria-controls', listId);
+      input.setAttribute('aria-autocomplete', 'list');
+      const setExpanded = open => input.setAttribute('aria-expanded', String(open));
       let deb;
       input.addEventListener('input', () => {
         clearTimeout(deb);
         deb = setTimeout(async () => {
           const q = input.value.trim();
-          if (!q) { hideAC(); return; }
+          if (!q) { hideAC(); setExpanded(false); return; }
           const res = await mw().mtgSearch(q);
           acItems = (res && res.ok ? res.data : []).slice(0, 12);
           acSel = -1; acTarget = input;
           popup.innerHTML = acItems.length
-            ? acItems.map((c, i) => `<div class="mtg-ac-item" data-i="${i}"><span>${esc(c.name)}</span><span class="mana">${esc(c.mana || c.type || '')}</span></div>`).join('')
-            : '<div class="mtg-ac-item muted">no matches</div>';
+            ? acItems.map((c, i) => `<div class="mtg-ac-item" role="option" aria-selected="false" data-i="${i}"><span>${esc(c.name)}</span><span class="mana">${esc(c.mana || c.type || '')}</span></div>`).join('')
+            : '<div class="mtg-ac-item muted" role="option" aria-selected="false">no matches</div>';
           popup.classList.remove('hidden');
+          setExpanded(true);
         }, 120);
       });
       input.addEventListener('keydown', e => {
@@ -443,13 +456,13 @@
         }
         if (e.key === 'ArrowDown') { e.preventDefault(); acSel = Math.min(acSel + 1, acItems.length - 1); paintAC(popup); }
         else if (e.key === 'ArrowUp') { e.preventDefault(); acSel = Math.max(acSel - 1, 0); paintAC(popup); }
-        else if (e.key === 'Enter' || e.key === 'Tab') {
+        else        if (e.key === 'Enter' || e.key === 'Tab') {
           e.preventDefault();
           const pick = acSel >= 0 ? acItems[acSel] : acItems[0];
           if (pick) { input.value = pick.name; onPick(pick.name); }
           else onPick(input.value.trim());
-          hideAC();
-        } else if (e.key === 'Escape') { hideAC(); e.stopPropagation(); }
+          hideAC(); setExpanded(false);
+        } else if (e.key === 'Escape') { hideAC(); setExpanded(false); e.stopPropagation(); }
       });
       popup.addEventListener('mousedown', e => {
         const item = e.target.closest('.mtg-ac-item[data-i]');
@@ -457,10 +470,16 @@
       });
     }
     function paintAC(popup) {
-      popup.querySelectorAll('.mtg-ac-item').forEach((el, i) => el.classList.toggle('sel', i === acSel));
+      popup.querySelectorAll('.mtg-ac-item').forEach((el, i) => {
+        el.classList.toggle('sel', i === acSel);
+        el.setAttribute('aria-selected', String(i === acSel));
+      });
     }
     function hideAC() {
-      document.querySelectorAll('.mtg-ac').forEach(p => p.classList.add('hidden'));
+      document.querySelectorAll('.mtg-ac').forEach(p => {
+        p.classList.add('hidden');
+        p.querySelectorAll('[aria-selected]').forEach(el => el.setAttribute('aria-selected', 'false'));
+      });
       acItems = []; acSel = -1;
     }
     document.addEventListener('click', e => {
@@ -469,7 +488,7 @@
 
     function colorPips(colors) {
       return (colors && colors.length ? colors : ['C']).map(c =>
-        `<span class="pip" style="background:${COLORS[c] || COLORS.C}" title="${c}"></span>`).join('');
+        `<span class="pip" style="background:${COLORS[c] || COLORS.C}" title="${c}" aria-hidden="true"></span>`).join('');
     }
 
     async function pickCard(name) {          // Enter in the card search
@@ -501,8 +520,8 @@
         <div class="mtg-coll-item">
           ${colorPips(c.colors)}
           <span class="nm" data-card="${esc(c.name)}" title="${esc(c.type || '')}">${esc(c.name)}</span>
-          <input type="number" min="0" value="${c.qty}" data-qty="${esc(c.name)}">
-          <button data-del="${esc(c.name)}" title="Remove">✕</button>
+          <input type="number" min="0" value="${c.qty}" data-qty="${esc(c.name)}" aria-label="${esc(c.name)} quantity">
+          <button data-del="${esc(c.name)}" aria-label="Remove ${esc(c.name)} from collection">✕</button>
         </div>`).join('') || '<span class="muted">Collection empty — add cards above.</span>';
     }
 

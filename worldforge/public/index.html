@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' vault-asset: data: https://cards.scryfall.io;">
 <title>WorldForge</title>
 <link rel="stylesheet" href="app.css">
@@ -10,26 +11,26 @@
 <div id="app">
   <nav id="rail">
     <div class="brand" title="WorldForge">◆</div>
-    <button class="rail-btn active" data-view="world" title="World (3D graph)">🌐</button>
-    <button class="rail-btn" data-view="cards" title="MTG workshop">🃏</button>
-    <button class="rail-btn" data-view="maps" title="Maps (M3)" disabled>🗺️</button>
-    <button class="rail-btn" data-view="publish" title="Publish (M4)" disabled>📖</button>
+    <button class="rail-btn active" data-view="world" title="World (3D graph)" aria-label="World (3D graph)">🌐</button>
+    <button class="rail-btn" data-view="cards" title="MTG workshop" aria-label="MTG workshop">🃏</button>
+    <button class="rail-btn" data-view="maps" title="Maps (M3)" aria-label="Maps (coming later)" disabled>🗺️</button>
+    <button class="rail-btn" data-view="publish" title="Publish (M4)" aria-label="Publish (coming later)" disabled>📖</button>
     <div class="rail-spacer"></div>
-    <button class="rail-btn" id="btn-manual" title="Field manual (help)">❓</button>
-    <button class="rail-btn" id="btn-vault" title="Choose vault folder">📂</button>
+    <button class="rail-btn" id="btn-manual" title="Field manual (help)" aria-label="Field manual (help)">❓</button>
+    <button class="rail-btn" id="btn-vault" title="Choose vault folder" aria-label="Choose vault folder">📂</button>
   </nav>
 
   <main id="main">
     <section id="view-world" class="view active">
       <div class="world-hud">
-        <input id="search" placeholder="Search notes…" autocomplete="off">
+        <input id="search" placeholder="Search notes…" aria-label="Search notes" autocomplete="off">
         <button id="btn-new" class="hud-btn" title="Create a new note">＋ Note</button>
         <button id="btn-import" class="hud-btn" title="Import .md notes from another folder">📥 Import</button>
         <button id="btn-graph-settings" class="hud-btn" title="Graph settings: size, distance, filters">⚙</button>
         <span id="vault-label" class="muted"></span>
       </div>
       <div id="new-note-bar" class="hidden">
-        <input id="nn-title" placeholder="Note title…" autocomplete="off">
+        <input id="nn-title" placeholder="Note title…" aria-label="New note title" autocomplete="off">
         <select id="nn-type">
           <option value="">— type —</option>
           <option>Character</option>
@@ -37,16 +38,16 @@
           <option>Item</option>
           <option>Lore</option>
         </select>
-        <input id="nn-folder" list="nn-folders" placeholder="folder (optional)">
+        <input id="nn-folder" list="nn-folders" placeholder="folder (optional)" aria-label="New note folder (optional)">
         <datalist id="nn-folders"></datalist>
         <button id="nn-create">Create</button>
         <button id="nn-cancel" title="Cancel">✕</button>
       </div>
       <div id="graph-settings" class="hidden">
         <div class="gs-title">Graph settings <button id="gs-close" title="Close">✕</button></div>
-        <div class="gs-row"><label>Node size</label><input id="gs-size" type="range" min="0.4" max="2.5" step="0.05"><span class="gs-val" id="gs-size-val"></span></div>
-        <div class="gs-row"><label>Link distance</label><input id="gs-rest" type="range" min="5" max="40" step="1"><span class="gs-val" id="gs-rest-val"></span></div>
-        <div class="gs-row"><label>Repel force</label><input id="gs-rep" type="range" min="200" max="4000" step="50"><span class="gs-val" id="gs-rep-val"></span></div>
+        <div class="gs-row"><label for="gs-size">Node size</label><input id="gs-size" type="range" min="0.4" max="2.5" step="0.05"><span class="gs-val" id="gs-size-val"></span></div>
+        <div class="gs-row"><label for="gs-rest">Link distance</label><input id="gs-rest" type="range" min="5" max="40" step="1"><span class="gs-val" id="gs-rest-val"></span></div>
+        <div class="gs-row"><label for="gs-rep">Repel force</label><input id="gs-rep" type="range" min="200" max="4000" step="50"><span class="gs-val" id="gs-rep-val"></span></div>
         <div class="gs-sep"></div>
         <div class="gs-title2">Show</div>
         <div class="gs-chips">
@@ -73,14 +74,14 @@
 
         <div class="mtg-pane active" id="mtg-pane-collection">
           <div class="mtg-searchbar">
-            <input id="mtg-q" placeholder="Find a card… (type, then Enter to add to collection)" autocomplete="off">
+            <input id="mtg-q" placeholder="Find a card… (type, then Enter to add to collection)" aria-label="Find a Magic card" autocomplete="off">
             <div id="mtg-ac" class="mtg-ac hidden"></div>
           </div>
           <div id="mtg-card-info" class="mtg-card-info hidden"></div>
           <div class="mtg-importrow">
-            <textarea id="mtg-paste" rows="3" placeholder="Paste a decklist, one card per line — “4x Lightning Bolt”, “2 Counterspell (LTR) 38” — and I'll read it"></textarea>
+            <textarea id="mtg-paste" rows="3" aria-label="Paste a decklist, one card per line" placeholder="Paste a decklist, one card per line — “4x Lightning Bolt”, “2 Counterspell (LTR) 38” — and I'll read it"></textarea>
             <button id="mtg-paste-add">Add list</button>
-            <span id="mtg-paste-status" class="muted"></span>
+            <span id="mtg-paste-status" class="muted" aria-live="polite"></span>
           </div>
           <div class="mtg-coll-head"><b id="mtg-coll-count">0</b><span class="muted"> cards in your collection (stored locally)</span></div>
           <div id="mtg-coll" class="mtg-coll"></div>
@@ -88,13 +89,13 @@
 
         <div class="mtg-pane" id="mtg-pane-deck">
           <div class="mtg-deckbar">
-            <select id="mtg-d-colors" title="Deck colors">
+            <select id="mtg-d-colors" title="Deck colors" aria-label="Deck colors">
               <option value="">🎯 Auto — learned from you</option>
               <option value="W">White</option><option value="U">Blue</option>
               <option value="B">Black</option><option value="R">Red</option>
               <option value="G">Green</option><option value="C">Colorless</option>
             </select>
-            <select id="mtg-d-size" title="Deck size">
+            <select id="mtg-d-size" title="Deck size" aria-label="Deck size">
               <option value="100">100 — Commander</option>
               <option value="60">60 — Standard</option>
               <option value="40">40 — Sealed</option>
@@ -106,13 +107,13 @@
 
         <div class="mtg-pane" id="mtg-pane-battlefield">
           <div class="mtg-playbar">
-            <span class="mtg-life-group"><button id="mtg-life-minus">−</button><span id="mtg-life">20</span><button id="mtg-life-plus">＋</button></span>
-            <button id="mtg-d20">🎲 d20</button>
-            <button id="mtg-coin">🪙 Coin</button>
-            <input id="mtg-bf-add" placeholder="put a card on the battlefield…" autocomplete="off">
+            <span class="mtg-life-group" aria-label="Life total"><button id="mtg-life-minus" aria-label="Decrease life">−</button><span id="mtg-life" aria-live="polite">20</span><button id="mtg-life-plus" aria-label="Increase life">＋</button></span>
+            <button id="mtg-d20" aria-label="Roll a twenty-sided die">🎲 d20</button>
+            <button id="mtg-coin" aria-label="Flip a coin">🪙 Coin</button>
+            <input id="mtg-bf-add" placeholder="put a card on the battlefield…" aria-label="Add a card to the battlefield" autocomplete="off">
             <div id="mtg-bf-ac" class="mtg-ac hidden"></div>
           </div>
-          <div id="mtg-bf-result" class="mtg-bf-result"></div>
+          <div id="mtg-bf-result" class="mtg-bf-result" role="status"></div>
           <div id="mtg-battlefield"></div>
         </div>
       </div>
