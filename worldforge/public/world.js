@@ -730,6 +730,52 @@
       },
       isPinned(id) { const m = byMesh.get(id); return m ? m.userData.pinned : null; },
       nodePos(id) { const m = byMesh.get(id); return m ? { ...m.position } : null; },
+      applyPositions(entries, select) {
+        if (!Array.isArray(entries)) return;
+        const touched = [];
+        for (const e of entries) {
+          const m = byMesh.get(e.id);
+          if (!m) continue;
+          m.position.set(e.pos.x, e.pos.y, e.pos.z);
+          touched.push(m);
+        }
+        updateEdgePositions();
+        markMoved(touched);
+        if (select) setSelection(touched);
+      },
+      arrange(kind) {
+        const sel = selectedMeshes();
+        if (!sel.length) return false;
+        const c = centerOf(sel);
+        const n = sel.length;
+        sel.forEach((m, i) => {
+          if (kind === 'circle') {
+            const a = (i / n) * Math.PI * 2;
+            m.position.set(c.x + Math.cos(a) * 8, c.y, c.z + Math.sin(a) * 8);
+          } else {
+            m.position.set(c.x + (i - (n - 1) / 2) * 3, c.y, c.z);
+          }
+        });
+        updateEdgePositions();
+        markMoved(sel);
+        return true;
+      },
+      isolate(selIds) {
+        const keep = new Set(selIds);
+        // expand one link-hop so context survives
+        for (const e of edgeObjs) {
+          if (keep.has(e.userData.a)) keep.add(e.userData.b);
+          if (keep.has(e.userData.b)) keep.add(e.userData.a);
+        }
+        for (const m of nodeObjs) {
+          m.material.opacity = keep.has(m.userData.id) ? 1 : 0.06;
+        }
+        for (const e of edgeObjs) {
+          const a = byMesh.get(e.userData.a), b = byMesh.get(e.userData.b);
+          e.visible = !!(a && b && (keep.has(e.userData.a) && keep.has(e.userData.b)));
+        }
+        // any filter/search change restores opacities via applyFilters/applySearch
+      },
       isDirty() { return pinDirty; },
       _test: {
         setSelection(list) { setSelection(list.map(id => byMesh.get(id)).filter(Boolean)); },

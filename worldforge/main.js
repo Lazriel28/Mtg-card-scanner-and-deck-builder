@@ -13,6 +13,7 @@ const mtg = require('./src/mtg');
 const tombstones = require('./src/tombstones');
 const mapsStore = require('./src/maps');
 const layoutStore = require('./src/layout');
+const tools = require('./src/vault-tools');
 const { exportSite } = require('./src/export');
 
 const DATA_DIR = path.join(__dirname, 'data');
@@ -309,3 +310,47 @@ ipcMain.handle('mtg:suggest-deck', wrap(opts => {
   return deck;
 }));
 ipcMain.handle('mtg:counters', wrap(names => mtg.analyzeCounters(names)));
+
+// ---------- vault tools (note ops, search, stats) ----------
+const needVault = () => { if (!vault) throw new Error('no vault loaded'); return vault; };
+
+ipcMain.handle('wf:search-all', wrap(q => tools.fulltextSearch(needVault(), q, 40)));
+ipcMain.handle('wf:stats', wrap(() => tools.vaultStats(needVault())));
+ipcMain.handle('wf:tags', wrap(() => tools.listTags(needVault())));
+ipcMain.handle('wf:tag-notes', wrap(tag => tools.notesWithTag(needVault(), tag)));
+ipcMain.handle('wf:broken-links', wrap(() => tools.brokenLinks(needVault())));
+ipcMain.handle('wf:rename-note', wrap((id, title) => {
+  const r = tools.renameNote(needVault(), id, title);
+  vault = scanVault(vault.root); return r;
+}));
+ipcMain.handle('wf:move-note', wrap((id, dir) => {
+  const r = tools.moveNote(needVault(), id, dir);
+  vault = scanVault(vault.root); return r;
+}));
+ipcMain.handle('wf:duplicate-note', wrap(id => {
+  const r = tools.duplicateNote(needVault(), id);
+  vault = scanVault(vault.root); return r;
+}));
+ipcMain.handle('wf:merge-notes', wrap((ids, opts) => {
+  const r = tools.mergeNotes(needVault(), ids, opts || {});
+  vault = scanVault(vault.root); return r;
+}));
+ipcMain.handle('wf:list-templates', wrap(() => tools.listTemplates(needVault())));
+ipcMain.handle('wf:get-template', wrap(name => tools.getTemplate(needVault(), name)));
+ipcMain.handle('wf:export-note', wrap((id, format) => tools.exportNoteText(needVault(), id, format)));
+ipcMain.handle('wf:favorites', wrap(() => tools.loadFavorites(DATA_DIR)));
+ipcMain.handle('wf:favorite-toggle', wrap(id => tools.toggleFavorite(DATA_DIR, id)));
+ipcMain.handle('wf:recent-edits', wrap(() => tools.recentEdits(needVault(), 12)));
+ipcMain.handle('wf:streak', wrap(() => tools.writingStreak(needVault())));
+ipcMain.handle('wf:random-note', wrap(excludeId => tools.randomNote(needVault(), excludeId)));
+ipcMain.handle('wf:open-trash', wrap(async () => {
+  if (!vault) throw new Error('no vault loaded');
+  const t = path.join(vault.root, '.trash');
+  fs.mkdirSync(t, { recursive: true });
+  shell.openPath(t); return { ok: true };
+}));
+ipcMain.handle('wf:open-backups', wrap(async () => {
+  if (!vault) throw new Error('no vault loaded');
+  const b = path.join(vault.root, '.worldforge', 'backups');
+  shell.openPath(b); return { ok: true };
+}));

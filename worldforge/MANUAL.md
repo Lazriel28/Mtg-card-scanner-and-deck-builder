@@ -314,7 +314,43 @@ folder of your choosing (`wiki-site-<date>`):
 public URL, no account needed for a peek), or push it to GitHub Pages /
 Cloudflare Pages. Or just double-click `index.html` — it works offline.
 
-## 13. On the roadmap
+## 13. Power tools (the ⌘ button)
+
+Everything below lives behind the **⌘** button or the note panel's tool row.
+
+### Command palette — Ctrl+K
+Every command in the app, searchable by typing a fragment. Enter runs, arrow
+keys move, Esc closes. Includes note ops, world commands, theme, sprint, and
+more. **?** opens this manual from anywhere.
+
+### Note tool row (any open note)
+- **☆ Star** favorites a note (star list is app-level, survives vault switches)
+- **☰ Outline** heading jumps for long notes · **🔍 Replace** find & replace
+- **📋 Template** insert a vault template (create a `templates/` folder)
+- **123** word/character count + reading time · **⧉ Copy** duplicates the note
+- **📁 Move** to another folder · **✎ Rename** — every `[[link]]` to the note is rewritten automatically
+- **⇪ Export** copies the note as plain text or raw markdown · **🗑** deletes
+
+### Vault insights (📊)
+Notes, words, links, orphan count, edits this week, a **day writing streak 🔥**,
+type breakdown, top tags (clickable), biggest and most-recent notes.
+
+### Vault tools (🔍)
+Lists every **broken `[[link]]`** and the notes that use it, with a one-click
+"create the missing note" fixer. Quick access to `.trash` and `backups`.
+
+### World extras
+- **Ctrl+Z / Ctrl+Y** undo/redo of node moves · **PNG snapshot** (palette) saves the current camera view
+- **Arrange selection in a circle/line**, **isolate** a node's neighborhood (palette commands)
+- **Light/dark theme** toggle (🌙 button) — remembered across restarts
+- **Writing sprint** — 15-minute timer with pause; the tally you need to beat
+
+### MTG extras
+- **📋 Copy decklist** exports the built deck as a standard sideboard-style list
+- **🎲 Challenge** — a random color + random card to build around
+- **📝 Log / ↺ / 🧹 Clear** — life-total log, reset, battlefield clear
+
+## 14. On the roadmap
 
 1. **M2 — Cards 🗂️** a gallery of your Characters / Locations / Items / Lore
    with one-click type setting.
@@ -324,9 +360,8 @@ Cloudflare Pages. Or just double-click `index.html` — it works offline.
    world, chapter text plays as subtitles — with pause, speed, fast-forward,
    scrub, and free camera control. Plus **Sim-to-Scene**: pose objects in the
    3D scene and the app writes the prose for you.
-4. **Blender-style spatial editing** drag, move, rotate, and box-select nodes
-   directly in 3D (G/R/S keybinds, Blender style) with hand-placed layouts
-   that persist — the engine for this is already built.
+4. **Book-to-video / cinema pipeline** — camera choreography over the 3D world
+   with generated narration, building on the placement engine shipped in §2b.
 
 *This manual lives at `worldforge/MANUAL.md` and is rendered into the app's ❓
 help view. It is updated whenever features ship — check its version line.*

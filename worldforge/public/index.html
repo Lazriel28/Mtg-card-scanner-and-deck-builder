@@ -27,7 +27,12 @@
         <button id="btn-new" class="hud-btn" title="Create a new note">＋ Note</button>
         <button id="btn-import" class="hud-btn" title="Import .md notes from another folder">📥 Import</button>
         <button id="btn-mass-delete" class="hud-btn" title="Delete many notes at once (goes to .trash, recoverable)">🗑 Mass delete</button>
+        <button id="btn-palette" class="hud-btn" title="Command palette (Ctrl+K)">⌘</button>
+        <button id="btn-insights" class="hud-btn" title="Vault insights: stats, tags, broken links, recents">📊</button>
+        <button id="btn-inspector" class="hud-btn" title="Vault tools: broken links, duplicates, orphan folders, backups">🔍</button>
+        <button id="btn-trashed" class="hud-btn" title="Open the .trash folder">🗑?:</button>
         <button id="btn-graph-settings" class="hud-btn" title="Graph settings: size, distance, filters">⚙</button>
+        <button id="btn-theme" class="hud-btn" title="Toggle light/dark theme">🌙</button>
         <span id="vault-label" class="muted"></span>
       </div>
       <div id="new-note-bar" class="hidden">
@@ -79,26 +84,20 @@
           <button id="xf-done" class="hud-btn primary" title="Keep the new arrangement (click anywhere)">Done</button>
         </div>
       </div>
-      <div id="sel-panel" class="hidden" role="status">
-        <div id="sel-title"></div>
-        <div id="sel-meta" class="muted"></div>
-        <div class="sel-actions">
-          <button id="sel-open" class="hud-btn" title="Open the first selected note">Open</button>
-          <button id="sel-pin" class="hud-btn" title="Pin in place, release, or save moved positions">📌 Pin</button>
-          <button id="sel-deselect" class="hud-btn" title="Clear selection (Esc)">Deselect</button>
-          <button id="sel-delete" class="hud-btn danger" title="Delete selection (goes to .trash, recoverable)">Delete</button>
-        </div>
-      </div>
-      <div id="xform-modal" class="hidden">
-        <div id="xf-title"></div>
-        <div id="xf-hint" class="muted"></div>
-        <div class="sel-actions">
-          <button id="xf-cancel" class="hud-btn" title="Undo and close (Esc)">Cancel</button>
-          <button id="xf-done" class="hud-btn primary" title="Keep the new arrangement (click anywhere)">Done</button>
-        </div>
-      </div>
       <div id="scene"></div>
       <div id="tooltip"></div>
+      <div id="cmd-palette" class="hidden">
+        <input id="cp-input" placeholder="Type a command… (Enter runs, Esc closes)" aria-label="Command search" autocomplete="off">
+        <div id="cp-list" role="listbox" aria-label="Commands"></div>
+      </div>
+      <div id="insights-overlay" class="hidden">
+        <div class="ov-head"><b>Vault insights</b><button id="insights-close" class="hud-btn" title="Close (Esc)">✕</button></div>
+        <div id="insights-body"></div>
+      </div>
+      <div id="inspector-overlay" class="hidden">
+        <div class="ov-head"><b>Vault tools</b><button id="inspector-close" class="hud-btn" title="Close (Esc)">✕</button></div>
+        <div id="inspector-body"></div>
+      </div>
     </section>
 
     <section id="view-cards" class="view">
@@ -138,6 +137,10 @@
               <option value="40">40 — Sealed</option>
             </select>
             <button id="mtg-d-build">Build me a deck</button>
+            <button id="mtg-deck-random" title="Random build challenge">🎲 Challenge</button>
+          </div>
+          <div class="mtg-searchbar" id="mtg-deck-actions" style="margin-top:6px">
+            <button id="mtg-deck-copy" title="Copy the built decklist to clipboard">📋 Copy decklist</button>
           </div>
           <div id="mtg-d-out"></div>
         </div>
@@ -147,10 +150,14 @@
             <span class="mtg-life-group" aria-label="Life total"><button id="mtg-life-minus" aria-label="Decrease life">−</button><span id="mtg-life" aria-live="polite">20</span><button id="mtg-life-plus" aria-label="Increase life">＋</button></span>
             <button id="mtg-d20" aria-label="Roll a twenty-sided die">🎲 d20</button>
             <button id="mtg-coin" aria-label="Flip a coin">🪙 Coin</button>
+            <button id="mtg-life-reset" title="Reset life to 20">↺</button>
+            <button id="mtg-life-log" title="Log current life total">📝 Log</button>
+            <button id="mtg-bf-reset" title="Clear all cards from the battlefield">🧹 Clear</button>
             <input id="mtg-bf-add" placeholder="put a card on the battlefield…" aria-label="Add a card to the battlefield" autocomplete="off">
             <div id="mtg-bf-ac" class="mtg-ac hidden"></div>
           </div>
           <div id="mtg-bf-result" class="mtg-bf-result" role="status"></div>
+          <div id="mtg-life-log-list" class="muted" aria-live="polite" style="min-height:16px"></div>
           <div id="mtg-battlefield"></div>
         </div>
       </div>
@@ -208,7 +215,19 @@
     <div id="np-tags" class="tags"></div>
     <div id="np-body" class="np-body"></div>
     <textarea id="np-raw" class="hidden" spellcheck="false"></textarea>
-    <div id="np-savebar" class="hidden">
+    <div class="np-actions np-toolrow">
+      <button id="np-star" class="hud-btn" title="Favorite this note (star)">☆</button>
+      <button id="np-toc" class="hud-btn" title="Outline of headings in this note">☰ Outline</button>
+      <button id="np-find" class="hud-btn" title="Find and replace in this note">🔍 Replace</button>
+      <button id="np-template" class="hud-btn" title="Insert a template at the cursor">📋 Template</button>
+      <button id="np-wordcount" class="hud-btn" title="Word and character count">123</button>
+      <button id="np-duplicate" class="hud-btn" title="Duplicate this note">⧉ Copy</button>
+      <button id="np-move" class="hud-btn" title="Move to another folder">📁 Move</button>
+      <button id="np-rename" class="hud-btn" title="Rename this note (links update too)">✎ Rename</button>
+      <button id="np-export" class="hud-btn" title="Copy note as text/html to clipboard">⇪ Export</button>
+      <button id="np-delete2" class="hud-btn danger" title="Delete this note">🗑</button>
+    </div>
+    <div id="np-subbar" class="hidden"></div>
       <span class="muted">Ctrl+S / button saves · backup is made automatically</span>
       <button id="np-save">Save</button>
     </div>

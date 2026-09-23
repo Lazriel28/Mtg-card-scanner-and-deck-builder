@@ -25,6 +25,12 @@
         <button id="btn-import" class="hud-btn">📥 Import</button>
         <button id="btn-mass-delete" class="hud-btn" title="Delete many notes at once (goes to .trash, recoverable)">🗑 Mass delete</button>
         <button id="btn-graph-settings" class="hud-btn" title="Graph settings">⚙</button>
+        <button id="btn-palette" class="hud-btn" title="Command palette (Ctrl+K)">⌘</button>
+        <button id="btn-insights" class="hud-btn" title="Vault insights: stats, tags, broken links, recents">📊</button>
+        <button id="btn-inspector" class="hud-btn" title="Vault tools: broken links, duplicates, orphan folders, backups">🔍</button>
+        <button id="btn-trashed" class="hud-btn" title="Open the .trash folder">🗑?:</button>
+        <button id="btn-graph-settings" class="hud-btn" title="Graph settings: size, distance, filters">⚙</button>
+        <button id="btn-theme" class="hud-btn" title="Toggle light/dark theme">🌙</button>
         <span id="vault-label" class="muted"></span>
       </div>
       <div id="new-note-bar" class="hidden">
@@ -78,6 +84,18 @@
       </div>
       <div id="scene"></div>
       <div id="tooltip"></div>
+      <div id="cmd-palette" class="hidden">
+        <input id="cp-input" placeholder="Type a command… (Enter runs, Esc closes)" aria-label="Command search" autocomplete="off">
+        <div id="cp-list" role="listbox" aria-label="Commands"></div>
+      </div>
+      <div id="insights-overlay" class="hidden">
+        <div class="ov-head"><b>Vault insights</b><button id="insights-close" class="hud-btn" title="Close (Esc)">✕</button></div>
+        <div id="insights-body"></div>
+      </div>
+      <div id="inspector-overlay" class="hidden">
+        <div class="ov-head"><b>Vault tools</b><button id="inspector-close" class="hud-btn" title="Close (Esc)">✕</button></div>
+        <div id="inspector-body"></div>
+      </div>
     </section>
     <section id="view-cards" class="view">
       <div class="mtg-wrap">
@@ -116,6 +134,10 @@
               <option value="40">40 — Sealed</option>
             </select>
             <button id="mtg-d-build">Build me a deck</button>
+            <button id="mtg-deck-random" title="Random build challenge">🎲 Challenge</button>
+          <div class="mtg-searchbar" id="mtg-deck-actions" style="margin-top:6px">
+            <button id="mtg-deck-copy" title="Copy the built decklist to clipboard">📋 Copy decklist</button>
+          </div>
           </div>
           <div id="mtg-d-out"></div>
         </div>
@@ -125,10 +147,14 @@
             <span class="mtg-life-group" aria-label="Life total"><button id="mtg-life-minus" aria-label="Decrease life">−</button><span id="mtg-life" aria-live="polite">20</span><button id="mtg-life-plus" aria-label="Increase life">＋</button></span>
             <button id="mtg-d20" aria-label="Roll a twenty-sided die">🎲 d20</button>
             <button id="mtg-coin" aria-label="Flip a coin">🪙 Coin</button>
+            <button id="mtg-life-reset" title="Reset life to 20">↺</button>
+            <button id="mtg-life-log" title="Log current life total">📝 Log</button>
+            <button id="mtg-bf-reset" title="Clear all cards from the battlefield">🧹 Clear</button>
             <input id="mtg-bf-add" placeholder="put a card on the battlefield…" aria-label="Add a card to the battlefield" autocomplete="off">
             <div id="mtg-bf-ac" class="mtg-ac hidden"></div>
           </div>
           <div id="mtg-bf-result" class="mtg-bf-result" role="status"></div>
+          <div id="mtg-life-log-list" class="muted" aria-live="polite" style="min-height:16px"></div>
           <div id="mtg-battlefield"></div>
         </div>
       </div>
@@ -179,6 +205,18 @@
     <div id="np-tags" class="tags"></div>
     <div id="np-body" class="np-body"></div>
     <textarea id="np-raw" class="hidden" spellcheck="false"></textarea>
+    <div class="np-actions np-toolrow">
+      <button id="np-star" class="hud-btn" title="Favorite this note (star)">☆</button>
+      <button id="np-toc" class="hud-btn" title="Outline of headings in this note">☰ Outline</button>
+      <button id="np-find" class="hud-btn" title="Find and replace in this note">🔍 Replace</button>
+      <button id="np-template" class="hud-btn" title="Insert a template at the cursor">📋 Template</button>
+      <button id="np-wordcount" class="hud-btn" title="Word and character count">123</button>
+      <button id="np-duplicate" class="hud-btn" title="Duplicate this note">⧉ Copy</button>
+      <button id="np-move" class="hud-btn" title="Move to another folder">📁 Move</button>
+      <button id="np-rename" class="hud-btn" title="Rename this note (links update too)">✎ Rename</button>
+      <button id="np-export" class="hud-btn" title="Copy note as text/html to clipboard">⇪ Export</button>
+      <button id="np-delete2" class="hud-btn danger" title="Delete this note">🗑</button>
+    </div>    <div id="np-subbar" class="hidden"></div>
     <div id="np-savebar" class="hidden"><span class="muted">Ctrl+S saves</span><button id="np-save">Save</button></div>
     <div id="np-links"></div>
   </aside>
@@ -270,6 +308,53 @@ function mtgMock() {
     openPath: async () => {},
     getLayout: async () => JSON.parse(localStorage.wfLayout || '{"version":1,"nodes":{}}'),
     saveLayout: async (l) => { localStorage.wfLayout = JSON.stringify({ version: 1, nodes: l.nodes || {} }); return { ok: true }; },
+    searchAll: async (q) => {
+      const needle = (q || '').toLowerCase();
+      if (!needle) return { ok: true, data: [] };
+      const hits = [];
+      for (const [id, n] of Object.entries(window.__wfData.notes)) {
+        const t = n.title.toLowerCase(), b = (n.raw || '').toLowerCase();
+        let score = 0, snippet = '';
+        if (t === needle) score += 100; else if (t.startsWith(needle)) score += 50; else if (t.includes(needle)) score += 25;
+        const i = b.indexOf(needle);
+        if (i !== -1) { score += 10; snippet = (n.raw || '').slice(Math.max(0, i - 30), i + needle.length + 40).replace(/\s+/g, ' '); }
+        if (score) hits.push({ id, title: n.title, dir: n.dir || '.', type: n.type, score, snippet });
+      }
+      hits.sort((a, b) => b.score - a.score);
+      return { ok: true, data: hits.slice(0, 40) };
+    },
+    stats: async () => {
+      const notes = Object.values(window.__wfData.notes);
+      let words = 0; const byType = {};
+      for (const n of notes) { words += ((n.raw || '').match(/[A-Za-z0-9']+/g) || []).length; byType[n.type || 'untyped'] = (byType[n.type || 'untyped'] || 0) + 1; }
+      const now = Date.now();
+      const sorted = [...notes].sort((a, b) => b.mtime - a.mtime);
+      return { ok: true, data: {
+        notes: notes.length, words, byType,
+        links: window.__wfData.graph.links.reduce((a, l) => a + (l.weight || 1), 0),
+        orphans: notes.filter(n => !(n.outgoing || []).length && !(n.backlinks || []).length).length,
+        editedLast7Days: 3,
+        biggest: sorted.slice(0, 5).map(n => ({ id: n.id, title: n.title, words: ((n.raw || '').match(/[A-Za-z0-9']+/g) || []).length })),
+        tags: [],
+      } };
+    },
+    tags: async () => ({ ok: true, data: [] }),
+    tagNotes: async () => ({ ok: true, data: [] }),
+    brokenLinks: async () => ({ ok: true, data: [] }),
+    renameNote: async (id, title) => { const n = window.__wfData.notes[id]; if (!n) throw new Error('missing'); const rel = (n.dir === '.' ? '' : n.dir + '/') + title + '.md'; delete window.__wfData.notes[id]; n.title = title; n.id = rel; window.__wfData.notes[rel] = n; window.__wfData.graph.nodes = window.__wfData.graph.nodes.map(x => x.id === id ? { ...x, id: rel, title } : x); return { ok: true, data: { id: rel, linksUpdated: 0, filesTouched: 0 } }; },
+    moveNote: async (id, dir) => { const n = window.__wfData.notes[id]; if (!n) throw new Error('missing'); const rel = (dir ? dir + '/' : '') + n.title + '.md'; delete window.__wfData.notes[id]; n.dir = dir || '.'; n.id = rel; window.__wfData.notes[rel] = n; window.__wfData.graph.nodes = window.__wfData.graph.nodes.map(x => x.id === id ? { ...x, id: rel, dir: n.dir } : x); return { ok: true, data: { id: rel } }; },
+    duplicateNote: async (id) => { const n = window.__wfData.notes[id]; if (!n) throw new Error('missing'); const rel = id.replace(/\.md$/, ' copy.md'); window.__wfData.notes[rel] = { ...n, id: rel, title: n.title + ' copy' }; window.__wfData.graph.nodes.push({ id: rel, title: n.title + ' copy', dir: n.dir, type: n.type, tags: [], size: n.raw.length, mtime: Date.now() }); return { ok: true, data: { id: rel } }; },
+    mergeNotes: async () => ({ ok: true, data: { id: 'Merged.md', linksUpdated: 0, trashed: [] } }),
+    listTemplates: async () => ({ ok: true, data: [{ name: 'Character', file: 'x' }] }),
+    getTemplate: async () => ({ ok: true, data: '# New' }),
+    exportNote: async (id, format) => ({ ok: true, data: { text: (window.__wfData.notes[id] || {}).raw || '' } }),
+    favorites: async () => ({ ok: true, data: JSON.parse(localStorage.wfFavs || '[]') }),
+    favoriteToggle: async (id) => { const f = JSON.parse(localStorage.wfFavs || '[]'); const i = f.indexOf(id); if (i === -1) f.push(id); else f.splice(i, 1); localStorage.wfFavs = JSON.stringify(f); return { ok: true, data: { active: i === -1, favorites: f } }; },
+    recentEdits: async () => ({ ok: true, data: Object.values(window.__wfData.notes).slice(0, 12).map(n => ({ id: n.id, title: n.title })) }),
+    streak: async () => ({ ok: true, data: { streak: 2, daysActive: 4, todayWords: 42, editedToday: true } }),
+    randomNote: async (ex) => { const ns = Object.values(window.__wfData.notes).filter(n => n.id !== ex); const n = ns[Math.floor(Math.random() * ns.length)]; return { ok: true, data: n ? { id: n.id, title: n.title } : null }; },
+    openTrash: async () => ({ ok: true }),
+    openBackups: async () => ({ ok: true }),
     unpinLayout: async (ids) => {
       let l; try { l = JSON.parse(localStorage.wfLayout || '{"version":1,"nodes":{}}'); } catch { l = { version: 1, nodes: {} }; }
       for (const id of ids || []) delete l.nodes[id];
@@ -287,7 +372,7 @@ function mtgMock() {
     // ---- MTG mock: tiny inline index + localStorage collection ----
     ...(mtgMock()),
   };
-  const V = 'world1';
+  const V = 'vfeatures';
   const s = document.createElement('script');
   s.src = 'vendor/three.min.js';
   s.onload = () => {

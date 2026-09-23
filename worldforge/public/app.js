@@ -586,7 +586,7 @@
 
     async function init() {
       if (ready) return; ready = true;
-      wireTabs(); wireSearch(); wireDeck(); wireBattlefield();
+      wireTabs(); wireSearch(); wireDeck(); wireBattlefield(); wireExtras();
       await refreshCollection();
     }
 
@@ -824,7 +824,56 @@
         </div>`).join('');
     }
 
-    return { init };
+    // ---- MTG extras ----
+    function copyDeck() {
+      const lines = [...document.querySelectorAll('#mtg-d-out .deck-line')]
+        .map(el => el.querySelector('.q').textContent + ' ' + el.dataset.card);
+      if (!lines.length) { alert('Build a deck first.'); return; }
+      mw().copyText(lines.join('\n'));
+      const btn = $('mtg-deck-copy');
+      if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = '📋 Copy decklist'; }, 1200); }
+    }
+
+    async function randomChallenge() {
+      const res = await mw().mtgSearch('');
+      const pool = res && res.ok ? res.data : [];
+      if (!pool.length) return;
+      const c = pool[Math.floor(Math.random() * pool.length)];
+      const col = ['W', 'U', 'B', 'R', 'G'][Math.floor(Math.random() * 5)];
+      $('mtg-d-colors').value = col;
+      alert(`🎲 Challenge: build a ${col}-colored deck around "${c.name}" (${c.mana || c.type || ''}).\n\nPick that color in the deck builder and see what it suggests from your collection!`);
+    }
+
+    function cardFullscreen(name) {
+      const info = $('mtg-card-info');
+      if (!info || info.classList.contains('hidden')) return;
+      const img = info.querySelector('img');
+      if (!img) return;
+      const ov = document.createElement('div');
+      ov.id = 'mtg-fs';
+      ov.innerHTML = `<img src="${img.src}" alt="${esc(name || 'card')}">`;
+      ov.addEventListener('click', () => ov.remove());
+      document.body.appendChild(ov);
+    }
+
+    function wireExtras() {
+      const row = $('mtg-deck-actions');
+      if (!row) return;
+      $('mtg-deck-copy').addEventListener('click', copyDeck);
+      $('mtg-deck-random').addEventListener('click', randomChallenge);
+      $('mtg-bf-reset').addEventListener('click', () => { bf = []; paintBf(); $('mtg-bf-result').textContent = 'battlefield cleared'; });
+      $('mtg-life-reset').addEventListener('click', () => { $('mtg-life').textContent = '20'; });
+      $('mtg-life-log').addEventListener('click', () => {
+        const v = $('mtg-life').textContent;
+        const log = $('mtg-life-log-list');
+        if (log) log.textContent = 'life at ' + new Date().toLocaleTimeString() + ': ' + v;
+      });
+      document.getElementById('mtg-card-info').addEventListener('dblclick', e => {
+        cardFullscreen(e.target.closest('img') ? undefined : null);
+      });
+    }
+
+    return { init, wireExtras };
   })();
 
   // ---------- mass delete ----------
@@ -959,5 +1008,430 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // ==================== command palette (Ctrl+K) ====================
+  const cpCommands = [
+    { label: 'New note', run: () => $('btn-new').click() },
+    { label: 'Import notes from folder', run: () => $('btn-import').click() },
+    { label: 'Mass delete notes', run: () => $('btn-mass-delete').click() },
+    { label: 'Vault insights (stats, tags)', run: () => openInsights() },
+    { label: 'Vault tools (broken links, backups)', run: () => openInspector() },
+    { label: 'Graph settings', run: () => $('btn-graph-settings').click() },
+    { label: 'Publish wiki site', run: () => switchView('publish') },
+    { label: 'Maps', run: () => switchView('maps') },
+    { label: 'MTG workshop', run: () => switchView('cards') },
+    { label: 'Open field manual', run: () => $('btn-manual').click() },
+    { label: 'Choose vault folder', run: () => $('btn-vault').click() },
+    { label: 'Reset world view', run: () => { if (world) world.resetView(); } },
+    { label: 'Select all visible nodes', run: () => { if (world && world.handleKey) world.handleKey({ key: 'a', target: document.body, preventDefault() {} }); } },
+    { label: 'Save positions (pin world)', run: () => { const b = $('sel-pin'); if (b && !$('sel-panel').classList.contains('hidden')) b.click(); } },
+    { label: 'Arrange selection in a circle', run: () => arrangeSelection('circle') },
+    { label: 'Arrange selection in a line', run: () => arrangeSelection('line') },
+    { label: 'Isolate selection neighborhood', run: () => isolateSelection() },
+    { label: 'Save world as PNG image', run: () => snapshotPNG() },
+    { label: 'Toggle light/dark theme', run: () => toggleTheme() },
+    { label: 'Writing sprint timer', run: () => startSprint() },
+    { label: 'Random note', run: () => openRandom() },
+    { label: 'Daily note', run: () => createDailyNote() },
+    { label: 'Open .trash folder', run: () => window.wf.openTrash() },
+    { label: 'Open backups folder', run: () => window.wf.openBackups() },
+    { label: 'Find & replace in current note', run: () => subFindReplace() },
+    { label: 'Note outline (table of contents)', run: () => subTOC() },
+    { label: 'Insert template…', run: () => subTemplate() },
+    { label: 'Copy note as plain text', run: () => exportNote('txt') },
+    { label: 'Copy note as raw markdown', run: () => exportNote('raw') },
+    { label: 'Duplicate current note', run: () => duplicateCurrent() },
+    { label: 'Rename current note…', run: () => subRename() },
+    { label: 'Move current note…', run: () => subMove() },
+  ];
+  let cpOpen = false, cpIdx = 0, cpFiltered = [];
+  function openPalette() {
+    cpOpen = true; cpIdx = 0;
+    $('cmd-palette').classList.remove('hidden');
+    $('cp-input').value = '';
+    cpPaint('');
+    $('cp-input').focus();
+  }
+  function closePalette() {
+    cpOpen = false;
+    $('cmd-palette').classList.add('hidden');
+  }
+  function cpPaint(q) {
+    const needle = q.trim().toLowerCase();
+    cpFiltered = cpCommands.filter(c => !needle || c.label.toLowerCase().includes(needle));
+    cpIdx = Math.min(cpIdx, Math.max(0, cpFiltered.length - 1));
+    $('cp-list').innerHTML = cpFiltered.map((c, i) =>
+      `<div class="cp-item${i === cpIdx ? ' active' : ''}" role="option" aria-selected="${i === cpIdx}" data-i="${i}"><span>${esc(c.label)}</span></div>`).join('');
+  }
+  on('btn-palette', 'click', openPalette);
+  on('cp-input', 'input', e => { cpIdx = 0; cpPaint(e.target.value); });
+  on('cp-input', 'keydown', e => {
+    if (e.key === 'Escape') { closePalette(); e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { cpIdx = Math.min(cpIdx + 1, cpFiltered.length - 1); cpPaint($('cp-input').value); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { cpIdx = Math.max(cpIdx - 1, 0); cpPaint($('cp-input').value); e.preventDefault(); }
+    else if (e.key === 'Enter') {
+      const c = cpFiltered[cpIdx];
+      closePalette();
+      if (c) c.run();
+      e.preventDefault();
+    }
+  });
+  on('cp-list', 'click', e => {
+    const item = e.target.closest('.cp-item');
+    if (!item) return;
+    const c = cpFiltered[+item.dataset.i];
+    closePalette();
+    if (c) c.run();
+  });
+  document.addEventListener('mousedown', e => {
+    if (cpOpen && !$('cmd-palette').contains(e.target) && e.target.id !== 'btn-palette') closePalette();
+  });
+
+  // ==================== insights panel (📊) ====================
+  async function openInsights() {
+    $('insights-overlay').classList.remove('hidden');
+    $('inspector-overlay').classList.add('hidden');
+    $('insights-body').innerHTML = '<span class="muted">Crunching…</span>';
+    const [s, tags, recent, streak] = await Promise.all([
+      window.wf.stats(), window.wf.tags(), window.wf.recentEdits(), window.wf.streak(),
+    ]);
+    const d = s.ok ? s.data : s;
+    const tg = tags.ok ? tags.data : tags;
+    const rc = recent.ok ? recent.data : recent;
+    const st = streak.ok ? streak.data : streak;
+    const fmt = n => (n || 0).toLocaleString();
+    $('insights-body').innerHTML = `
+      <div class="stat-grid">
+        <div class="stat"><b>${fmt(d.notes)}</b><span>notes</span></div>
+        <div class="stat"><b>${fmt(d.words)}</b><span>words written</span></div>
+        <div class="stat"><b>${fmt(d.links)}</b><span>wiki links</span></div>
+        <div class="stat"><b>${st.streak}🔥</b><span>day streak</span></div>
+        <div class="stat"><b>${fmt(d.orphans)}</b><span>orphan notes</span></div>
+        <div class="stat"><b>${fmt(d.editedLast7Days)}</b><span>edited this week</span></div>
+      </div>
+      <div class="ins-sec"><h4>Types</h4><div class="tagbar">${Object.entries(d.byType).map(([t, c]) => `<span class="tag-pill">${esc(t)} × ${c}</span>`).join('')}</div></div>
+      <div class="ins-sec"><h4>Top tags</h4><div class="tagbar">${tg.slice(0, 14).map(x => `<span class="tag-pill" data-tag="${esc(x.tag)}">${esc(x.tag)} × ${x.count}</span>`).join('') || '<span class="muted">none yet</span>'}</div></div>
+      <div class="ins-sec"><h4>Biggest notes</h4><ul class="ins-list">${d.biggest.map(n => `<li><a data-open="${esc(n.id)}">${esc(n.title)}</a> <span class="muted">${fmt(n.words)} words</span></li>`).join('')}</ul></div>
+      <div class="ins-sec"><h4>Recently edited</h4><ul class="ins-list">${rc.map(n => `<li><a data-open="${esc(n.id)}">${esc(n.title)}</a></li>`).join('')}</ul></div>`;
+    wireInsLinks();
+    $('insights-body').querySelectorAll('[data-tag]').forEach(p =>
+      p.addEventListener('click', async () => {
+        const r = await window.wf.tagNotes(p.dataset.tag);
+        const notes = r.ok ? r.data : r;
+        $('insights-body').innerHTML = `<div class="ov-head"><b>#${esc(p.dataset.tag)}</b><button id="tag-back" class="hud-btn">← back</button></div>
+          <ul class="ins-list">${notes.map(n => `<li><a data-open="${esc(n.id)}">${esc(n.title)}</a></li>`).join('')}</ul>`;
+        wireInsLinks();
+        on('tag-back', 'click', openInsights);
+      }));
+  }
+  function wireInsLinks() {
+    $('insights-body').querySelectorAll('[data-open]').forEach(a =>
+      a.addEventListener('click', () => { $('insights-overlay').classList.add('hidden'); openNote(a.dataset.open); }));
+  }
+  on('btn-insights', 'click', openInsights);
+  on('insights-close', 'click', () => $('insights-overlay').classList.add('hidden'));
+
+  // ==================== inspector — vault tools (🔍) ====================
+  async function openInspector() {
+    $('inspector-overlay').classList.remove('hidden');
+    $('insights-overlay').classList.add('hidden');
+    $('inspector-body').innerHTML = '<span class="muted">Scanning…</span>';
+    const [broken, stats] = await Promise.all([window.wf.brokenLinks(), window.wf.stats()]);
+    const bk = broken.ok ? broken.data : broken;
+    const st = stats.ok ? stats.data : stats;
+    const groups = {};
+    for (const b of bk) (groups[b.target] = groups[b.target] || []).push(b);
+    $('inspector-body').innerHTML = `
+      <div class="ins-sec"><h4>Broken links (${bk.length})</h4>
+        ${bk.length ? `<ul class="ins-list">${Object.entries(groups).slice(0, 20).map(([target, uses]) =>
+          `<li>[[${esc(target)}]] — used in ${uses.map(u => `<a data-open="${esc(u.from)}">${esc(u.fromTitle)}</a>`).join(', ')}</li>`).join('')}</ul>
+          <div class="row" style="margin-top:8px"><button id="fix-first-broken" class="hud-btn">Create first missing note</button></div>` : '<span class="muted">None — every link resolves. 🎉</span>'}
+      </div>
+      <div class="ins-sec"><h4>Vault hygiene</h4>
+        <ul class="ins-list">
+          <li><a id="ins-open-trash">Open .trash folder</a> — deleted notes live here</li>
+          <li><a id="ins-open-backups">Open backups folder</a> — automatic safety copies</li>
+          <li>Orphan notes: <b>${st.orphans}</b> (hide via ⚙ Orphans chip)</li>
+        </ul>
+      </div>`;
+    $('inspector-body').querySelectorAll('[data-open]').forEach(a =>
+      a.addEventListener('click', () => { $('inspector-overlay').classList.add('hidden'); openNote(a.dataset.open); }));
+    const mk = $('fix-first-broken');
+    if (mk) mk.addEventListener('click', async () => {
+      const title = Object.keys(groups)[0].split('#')[0];
+      await window.wf.createNote(title, '', '');
+      $('inspector-overlay').classList.add('hidden');
+      await refreshGraph();
+      openNote(title + '.md');
+    });
+    on('ins-open-trash', 'click', () => window.wf.openTrash());
+    on('ins-open-backups', 'click', () => window.wf.openBackups());
+  }
+  on('btn-inspector', 'click', openInspector);
+  on('inspector-close', 'click', () => $('inspector-overlay').classList.add('hidden'));
+
+  // ==================== note tool row ====================
+  function curId() { return currentNote ? currentNote.id : null; }
+  function subbar(html) { $('np-subbar').innerHTML = html; $('np-subbar').classList.remove('hidden'); }
+  function subbarHide() { $('np-subbar').classList.add('hidden'); $('np-subbar').innerHTML = ''; }
+
+  function subTOC() {
+    if (!currentNote) return;
+    const body = currentNote.raw || '';
+    const hs = [];
+    const re = /^(#{1,3})\s+(.+)$/gm;
+    let m;
+    while ((m = re.exec(body))) hs.push({ level: m[1].length, text: m[2].trim() });
+    if (!hs.length) { subbar('<span class="muted">No headings in this note.</span>'); return; }
+    subbar(hs.map(h => `<span class="toc-link l${h.level}" data-h="${esc(h.text)}">${'·'.repeat(h.level - 1)} ${esc(h.text)}</span>`).join(''));
+    $('np-subbar').querySelectorAll('.toc-link').forEach(a =>
+      a.addEventListener('click', () => {
+        subbarHide();
+        setEditMode(false);
+        const el = [...$('np-body').querySelectorAll('h1,h2,h3')]
+          .find(e => e.textContent.trim() === a.dataset.h);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }));
+  }
+
+  function subFindReplace() {
+    if (!currentNote) return;
+    setEditMode(true);
+    subbar(`<div class="row"><input id="fr-find" placeholder="Find…" aria-label="Find"><input id="fr-replace" placeholder="Replace with…" aria-label="Replace with"><button id="fr-count" class="hud-btn">Count</button><button id="fr-all" class="hud-btn">Replace all</button></div><span id="fr-status" class="muted" aria-live="polite"></span>`);
+    const status = $('fr-status');
+    $('fr-count').addEventListener('click', () => {
+      const n = countOccurrences($('np-raw').value, $('fr-find').value);
+      status.textContent = `${n} match${n === 1 ? '' : 'es'}`;
+    });
+    $('fr-all').addEventListener('click', () => {
+      const f = $('fr-find').value;
+      if (!f) { status.textContent = 'Type something to find.'; return; }
+      const n = countOccurrences($('np-raw').value, f);
+      $('np-raw').value = $('np-raw').value.split(f).join($('fr-replace').value);
+      status.textContent = `Replaced ${n} — remember to save (Ctrl+S)`;
+    });
+    $('fr-find').focus();
+  }
+  function countOccurrences(hay, needle) { return needle ? hay.split(needle).length - 1 : 0; }
+
+  async function subTemplate() {
+    if (!currentNote) return;
+    const r = await window.wf.listTemplates();
+    const ts = r.ok ? r.data : r;
+    if (!ts.length) { alert('No templates yet.\n\nCreate a "templates" folder in your vault with .md files in it — they will appear here.'); return; }
+    subbar(`<div class="row"><select id="tpl-pick" aria-label="Template">${ts.map(t => `<option value="${esc(t.name)}">${esc(t.name)}</option>`).join('')}</select><button id="tpl-insert" class="hud-btn">Insert</button></div>`);
+    $('tpl-insert').addEventListener('click', async () => {
+      const t = await window.wf.getTemplate($('tpl-pick').value);
+      const text = t.ok ? t.data : t;
+      setEditMode(true);
+      const ta = $('np-raw');
+      const at = ta.selectionStart || ta.value.length;
+      ta.value = ta.value.slice(0, at) + text + ta.value.slice(at);
+      subbarHide();
+      alert('Template inserted — remember to save (Ctrl+S).');
+    });
+  }
+
+  function subRename() {
+    if (!currentNote) return;
+    subbar(`<div class="row"><input id="rn-input" value="${esc(currentNote.title)}" aria-label="New title"><button id="rn-go" class="hud-btn">Rename</button></div><span class="muted">Every [[link]] to this note is rewritten automatically.</span>`);
+    $('rn-input').focus(); $('rn-input').select();
+    const go = async () => {
+      try {
+        const r = await window.wf.renameNote(curId(), $('rn-input').value);
+        const d = r.ok ? r.data : r;
+        subbarHide();
+        await refreshGraph();
+        openNote(d.id);
+      } catch (err) { alert('Rename failed: ' + (err.message || err)); }
+    };
+    $('rn-go').addEventListener('click', go);
+    $('rn-input').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  }
+
+  function subMove() {
+    if (!currentNote) return;
+    subbar(`<div class="row"><input id="mv-input" value="${esc(currentNote.dir === '.' ? '' : currentNote.dir)}" placeholder="folder (blank = vault root)" aria-label="Destination folder"><button id="mv-go" class="hud-btn">Move</button></div><span class="muted">Links keep working — they resolve by note name.</span>`);
+    $('mv-input').focus();
+    const go = async () => {
+      try {
+        const r = await window.wf.moveNote(curId(), $('mv-input').value);
+        const d = r.ok ? r.data : r;
+        subbarHide();
+        await refreshGraph();
+        openNote(d.id);
+      } catch (err) { alert('Move failed: ' + (err.message || err)); }
+    };
+    $('mv-go').addEventListener('click', go);
+    $('mv-input').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  }
+
+  async function duplicateCurrent() {
+    if (!currentNote) return;
+    const r = await window.wf.duplicateNote(curId());
+    const d = r.ok ? r.data : r;
+    await refreshGraph();
+    openNote(d.id);
+  }
+
+  async function exportNote(format) {
+    if (!currentNote) return;
+    const r = await window.wf.exportNote(curId(), format);
+    const d = r.ok ? r.data : r;
+    await window.wf.copyText(d.text);
+    alert(`Copied as ${format === 'txt' ? 'plain text' : 'raw markdown'} — paste anywhere.`);
+  }
+
+  async function toggleStar() {
+    if (!currentNote) return;
+    const r = await window.wf.favoriteToggle(curId());
+    const d = r.ok ? r.data : r;
+    $('np-star').textContent = d.active ? '★' : '☆';
+    $('np-star').title = d.active ? 'Remove from favorites' : 'Favorite this note (star)';
+  }
+  async function paintStar() {
+    if (!currentNote) return;
+    try {
+      const r = await window.wf.favorites();
+      const favs = r.ok ? r.data : r;
+      $('np-star').textContent = favs.includes(curId()) ? '★' : '☆';
+    } catch { $('np-star').textContent = '☆'; }
+  }
+
+  function subWordCount() {
+    if (!currentNote) return;
+    const text = currentNote.raw || '';
+    const words = (text.match(/[\p{L}\p{N}']+/gu) || []).length;
+    subbar(`<span class="muted" aria-live="polite"><b>${words.toLocaleString()}</b> words · <b>${text.length.toLocaleString()}</b> characters · <b>${Math.max(1, Math.round(words / 220))}</b> min read</span>`);
+    clearTimeout(subWordCount._t);
+    subWordCount._t = setTimeout(subbarHide, 4000);
+  }
+
+  on('np-toc', 'click', subTOC);
+  on('np-find', 'click', subFindReplace);
+  on('np-template', 'click', subTemplate);
+  on('np-wordcount', 'click', subWordCount);
+  on('np-rename', 'click', subRename);
+  on('np-move', 'click', subMove);
+  on('np-duplicate', 'click', duplicateCurrent);
+  on('np-export', 'click', () => exportNote('txt'));
+  on('np-star', 'click', toggleStar);
+  on('np-delete2', 'click', () => {
+    if (currentNote && confirm(`Delete "${currentNote.title}"? It moves to .trash — recoverable.`)) deleteNoteById(curId());
+  });
+
+  const _openNoteBase = openNote;
+  openNote = async function (id) { await _openNoteBase(id); paintStar(); subbarHide(); };
+
+  // ==================== world: undo/redo, arrange, isolate, snapshot ====================
+  const undoStack = [], redoStack = [];
+  function worldSnapshot() {
+    if (!world) return null;
+    const ids = world.getSelected();
+    return ids.length ? ids.map(id => ({ id, pos: world.nodePos(id) })) : null;
+  }
+  function worldUndo() {
+    const s = undoStack.pop();
+    if (s && world.applyPositions) { redoStack.push(worldSnapshot()); world.applyPositions(s, true); }
+  }
+  function worldRedo() {
+    const s = redoStack.pop();
+    if (s && world.applyPositions) { undoStack.push(worldSnapshot()); world.applyPositions(s, true); }
+  }
+
+  function arrangeSelection(kind) {
+    if (!world) return;
+    if (!world.getSelected().length) { alert('Select nodes first — click, box-drag, or A.'); return; }
+    if (world.arrange(kind)) alert('Arranged — 💾 Save positions to keep.');
+  }
+  function isolateSelection() {
+    if (!world) return;
+    const sel = world.getSelected();
+    if (!sel.length) { alert('Select at least one node to isolate its neighborhood.'); return; }
+    world.isolate(sel);
+  }
+  function snapshotPNG() {
+    const canvas = document.querySelector('#scene canvas');
+    if (!canvas) { alert('No world rendered yet.'); return; }
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = 'worldforge-' + new Date().toISOString().slice(0, 10) + '.png';
+    a.click();
+  }
+
+  async function openRandom() {
+    const r = await window.wf.randomNote(currentNote ? currentNote.id : null);
+    const n = r.ok ? r.data : r;
+    if (!n) { alert('Not enough notes yet.'); return; }
+    openNote(n.id);
+  }
+
+  async function createDailyNote() {
+    const title = new Date().toISOString().slice(0, 10) + ' Daily';
+    try {
+      const r = await window.wf.createNote(title, 'Daily', '');
+      const id = r.ok ? r.data.id : r.id;
+      await refreshGraph();
+      openNote(id);
+    } catch (err) { alert('Could not create daily note: ' + (err.message || err)); }
+  }
+
+  // ==================== sprint timer ====================
+  let sprintTimer = null;
+  function startSprint() {
+    const existing = document.getElementById('sprint-box');
+    if (existing) { existing.remove(); clearInterval(sprintTimer); sprintTimer = null; return; }
+    const box = document.createElement('div');
+    box.id = 'sprint-box';
+    box.innerHTML = `<div id="sprint-time">15:00</div>
+      <div class="row" style="gap:4px; justify-content:center; margin-top:4px">
+        <button id="sprint-pause" class="hud-btn" title="Pause/resume">⏯</button>
+        <button id="sprint-end" class="hud-btn" title="End sprint">✕</button>
+      </div>
+      <div class="muted" style="font-size:11px" aria-live="polite">writing sprint — 15 min</div>`;
+    document.getElementById('view-world').appendChild(box);
+    let left = 15 * 60, paused = false;
+    sprintTimer = setInterval(() => {
+      if (paused) return;
+      left--;
+      const mm = String(Math.floor(left / 60)).padStart(2, '0'), ss = String(left % 60).padStart(2, '0');
+      const t = document.getElementById('sprint-time');
+      if (t) t.textContent = `${mm}:${ss}`;
+      if (left <= 0) {
+        clearInterval(sprintTimer); sprintTimer = null;
+        alert('⏰ Sprint done — stretch those fingers.');
+        box.remove();
+      }
+    }, 1000);
+    document.getElementById('sprint-pause').addEventListener('click', () => { paused = !paused; });
+    document.getElementById('sprint-end').addEventListener('click', () => { clearInterval(sprintTimer); sprintTimer = null; box.remove(); });
+  }
+
+  // ==================== theme ====================
+  function toggleTheme() {
+    document.body.classList.toggle('wf-light');
+    const light = document.body.classList.contains('wf-light');
+    try { localStorage.setItem('wf.theme', light ? 'light' : 'dark'); } catch {}
+    $('btn-theme').textContent = light ? '☀️' : '🌙';
+  }
+  on('btn-theme', 'click', toggleTheme);
+  try {
+    if (localStorage.getItem('wf.theme') === 'light') {
+      document.body.classList.add('wf-light');
+      $('btn-theme').textContent = '☀️';
+    }
+  } catch {}
+
+  on('btn-trashed', 'click', () => window.wf.openTrash());
+
+  // Ctrl+K palette · Ctrl+Z / Ctrl+Y world undo · ? opens the manual
+  document.addEventListener('keydown', e => {
+    const typing = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); cpOpen ? closePalette() : openPalette(); }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !typing) worldUndo();
+    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z')) && !typing) worldRedo();
+    if (e.key === '?' && !typing) $('btn-manual').click();
+  });
+
   boot();
 })();
+
