@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WorldForge harness</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+  <nav id="rail">
+    <div class="brand">◆</div>
+    <button class="rail-btn active" data-view="world">🌐</button>
+    <button class="rail-btn" data-view="cards" disabled>🃏</button>
+    <button class="rail-btn" data-view="maps" disabled>🗺️</button>
+    <button class="rail-btn" data-view="publish" disabled>📖</button>
+    <div class="rail-spacer"></div>
+    <button class="rail-btn" id="btn-manual" title="Field manual">❓</button>
+    <button class="rail-btn" id="btn-vault">📂</button>
+  </nav>
+  <main id="main">
+    <section id="view-world" class="view active">
+      <div class="world-hud">
+        <input id="search" placeholder="Search notes…" autocomplete="off">
+        <button id="btn-new" class="hud-btn">＋ Note</button>
+        <button id="btn-import" class="hud-btn">📥 Import</button>
+        <button id="btn-graph-settings" class="hud-btn" title="Graph settings">⚙</button>
+        <span id="vault-label" class="muted"></span>
+      </div>
+      <div id="new-note-bar" class="hidden">
+        <input id="nn-title" placeholder="Note title…" autocomplete="off">
+        <select id="nn-type">
+          <option value="">— type —</option>
+          <option>Character</option>
+          <option>Location</option>
+          <option>Item</option>
+          <option>Lore</option>
+        </select>
+        <input id="nn-folder" list="nn-folders" placeholder="folder (optional)">
+        <datalist id="nn-folders"></datalist>
+        <button id="nn-create">Create</button>
+        <button id="nn-cancel" title="Cancel">✕</button>
+      </div>
+      <div id="graph-settings" class="hidden">
+        <div class="gs-title">Graph settings <button id="gs-close">✕</button></div>
+        <div class="gs-row"><label>Node size</label><input id="gs-size" type="range" min="0.4" max="2.5" step="0.05"><span class="gs-val" id="gs-size-val"></span></div>
+        <div class="gs-row"><label>Link distance</label><input id="gs-rest" type="range" min="5" max="40" step="1"><span class="gs-val" id="gs-rest-val"></span></div>
+        <div class="gs-row"><label>Repel force</label><input id="gs-rep" type="range" min="200" max="4000" step="50"><span class="gs-val" id="gs-rep-val"></span></div>
+        <div class="gs-sep"></div>
+        <div class="gs-title2">Show</div>
+        <div class="gs-chips">
+          <button class="cat-chip" data-type="character">Character</button>
+ <button class="cat-chip" data-type="location">Location</button>
+          <button class="cat-chip" data-type="item">Item</button>
+          <button class="cat-chip" data-type="lore">Lore</button>
+          <button class="cat-chip" data-type="untyped">Untyped</button>
+          <button class="cat-chip orphan" data-orphans="1">Orphans</button>
+        </div>
+        <div class="gs-hint">Sliders re-layout · chips hide categories · orphans = unlinked notes</div>
+      </div>
+      <div id="scene"></div>
+      <div id="tooltip"></div>
+    </section>
+    <section id="view-cards" class="view"><p class="muted pad">Cards arrive in M2.</p></section>
+    <section id="view-maps" class="view"><p class="muted pad">Maps arrive in M3.</p></section>
+    <section id="view-publish" class="view"><p class="muted pad">Publish arrives in M4.</p></section>
+  </main>
+  <aside id="note-panel" class="hidden">
+    <div class="np-head">
+      <div><div id="np-crumb" class="crumb"></div><h2 id="np-title"></h2></div>
+      <div class="np-actions"><button id="np-edit">Edit</button><button id="np-close">✕</button></div>
+    </div>
+    <div id="np-tags" class="tags"></div>
+    <div id="np-body" class="np-body"></div>
+    <textarea id="np-raw" class="hidden" spellcheck="false"></textarea>
+    <div id="np-savebar" class="hidden"><span class="muted">Ctrl+S saves</span><button id="np-save">Save</button></div>
+    <div id="np-links"></div>
+  </aside>
+</div>
+<div id="manual-overlay" class="hidden"><iframe id="manual-frame" src="about:blank"></iframe><button id="manual-close" title="Close (Esc)">✕</button></div>
+<script src="vendor/three.min.js"></script>
+<script>
+// ---- window.wf mock backed by harness-data.json ----
+(async function () {
+  const data = await fetch('harness-data.json').then(r => r.json());
+  window.wf = {
+    status: async () => ({ loaded: true, root: data.root, notes: data.graph.nodes.length }),
+    pickVault: async () => null,
+    loadVault: async () => {},
+    graph: async () => data.graph,
+    note: async (id) => data.notes[id],
+    saveNote: async (id, raw) => { data.notes[id].raw = raw; },
+    pickImport: async () => null,
+    importNotes: async () => ({ imported: 0, renamed: 0, skipped: 0, dest: 'imports' }),
+    noteTitles: async () => Object.keys(data.notes).map(id => ({ id, title: data.notes[id].title })),
+    setType: async (id, type) => { if (data.notes[id]) data.notes[id].type = (type || 'untyped').toLowerCase(); const nd = data.graph.nodes.find(n => n.id === id); if (nd) nd.type = (type || 'untyped').toLowerCase(); return { ok: true }; },
+    copyText: async t => { window.__lastCopy = t; return { ok: true }; },
+    deleteNote: async id => { delete data.notes[id]; data.graph.nodes = data.graph.nodes.filter(n => n.id !== id); return { ok: true }; },
+    createNote: async (title, folder, type) => {
+      const rel = (folder ? folder + '/' : '') + title + '.md';
+      data.notes[rel] = { id: rel, title, dir: folder || '.', type: (type || '').toLowerCase() || 'untyped', raw: (type ? '---\ntype: ' + type + '\n---\n\n' : '') + '# ' + title + '\n\n', html: '<h1>' + title + '</h1>', outgoing: [], backlinks: [] };
+      data.graph.nodes.push({ id: rel, title, dir: folder || '.', type: (type || '').toLowerCase() || 'untyped', tags: [], size: 10, mtime: 0 });
+      return { ok: true, id: rel };
+    },
+    openPath: async () => {},
+  };
+  const V = 'fly1';
+  const s = document.createElement('script');
+  s.src = 'vendor/three.min.js';
+  s.onload = () => {
+    const w = document.createElement('script');
+    w.src = 'world.js?v=' + V;
+    w.onload = () => { const a = document.createElement('script'); a.src = 'app.js?v=' + V; document.body.appendChild(a); };
+    document.body.appendChild(w);
+  };
+  document.body.appendChild(s);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+'use strict';
+// WorldForge - Electron main process. All disk I/O lives here; the renderer
+// never touches fs directly (contextIsolation + preload whitelist).
+
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const { scanVault } = require('./src/vault');
+const { renderMarkdown } = require('./src/md');
+const { importNotes } = require('./src/importer');
+const { setTypeInRaw } = require('./src/types');
+
+const DATA_DIR = path.join(__dirname, 'data');
+const CONFIG = path.join(DATA_DIR, 'config.json');
+
+let vault = null;
+let win = null;
+
+function loadConfig() {
+  try { return JSON.parse(fs.readFileSync(CONFIG, 'utf8')); } catch { return {}; }
+}
+function saveConfig(cfg) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
+}
+
+function backupNote(vaultRoot, id) {
+  const src = path.join(vaultRoot, id);
+  if (!fs.existsSync(src)) return null;
+  const dir = path.join(vaultRoot, '.worldforge', 'backups');
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const dest = path.join(dir, id.replace(/[\\/]/g, '__') + '.' + stamp + '.bak');
+  fs.copyFileSync(src, dest);
+  pruneBackups(dir);
+  return dest;
+}
+
+function pruneBackups(dir, keep = 50) {
+  try {
+    const files = fs.readdirSync(dir).map(f => {
+      const full = path.join(dir, f);
+      return { full, m: fs.statSync(full).mtimeMs };
+    }).sort((a, b) => b.m - a.m);
+    for (const f of files.slice(keep)) fs.unlinkSync(f.full);
+  } catch {}
+}
+
+function doLoadVault(rootPath) {
+  if (!rootPath || !fs.existsSync(rootPath)) throw new Error('folder not found: ' + rootPath);
+  vault = scanVault(rootPath);
+  const cfg = loadConfig(); cfg.lastVault = rootPath; saveConfig(cfg);
+  return { root: vault.root, notes: vault.notes.length, links: vault.graph.links.length };
+}
+
+function createWindow() {
+  win = new BrowserWindow({
+    width: 1360, height: 860, minWidth: 980, minHeight: 640,
+    backgroundColor: '#0d1117',
+    title: 'WorldForge',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+  win.removeMenu();
+  win.loadFile(path.join(__dirname, 'public', 'index.html'));
+}
+
+app.whenReady().then(() => {
+  // auto-load last vault so the user lands in their world immediately
+  const cfg = loadConfig();
+  if (cfg.lastVault) {
+    try { doLoadVault(cfg.lastVault); } catch (e) { console.error('auto-load failed:', e.message); }
+  }
+  createWindow();
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+});
+
+app.on('window-all-closed', () => { app.quit(); });
+
+/* ---------------- IPC ---------------- */
+
+ipcMain.handle('wf:status', () => ({
+  loaded: !!vault, root: vault ? vault.root : null,
+  notes: vault ? vault.notes.length : 0, lastVault: loadConfig().lastVault || null,
+}));
+
+ipcMain.handle('wf:pick-vault', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Choose your Obsidian vault (or any notes folder)',
+    properties: ['openDirectory'],
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+
+ipcMain.handle('wf:load-vault', (e, p) => doLoadVault(p));
+
+ipcMain.handle('wf:graph', () => {
+  if (!vault) throw new Error('no vault loaded');
+  return vault.graph;
+});
+
+ipcMain.handle('wf:note', (e, id) => {
+  if (!vault) throw new Error('no vault loaded');
+  const n = vault.notesById.get(id);
+  if (!n) throw new Error('note not found: ' + id);
+  const linkFor = (target, exists) => exists
+    ? '#note:' + encodeURIComponent(vault.resolve(target).id)
+    : '#missing:' + encodeURIComponent(target);
+  return {
+    id: n.id, title: n.title, dir: n.dir, tags: n.tags, type: n.type || 'untyped',
+    html: renderMarkdown(n.body, t => !!vault.resolve(t), linkFor),
+    raw: n.raw,
+    outgoing: [...new Set(n.outgoing)],
+    backlinks: [...new Set(n.backlinks)],
+  };
+});
+
+ipcMain.handle('wf:save-note', (e, id, raw) => {
+  if (!vault) throw new Error('no vault loaded');
+  const n = vault.notesById.get(id);
+  if (!n) throw new Error('note not found');
+  backupNote(vault.root, id);
+  fs.writeFileSync(n.file, String(raw), 'utf8');
+  vault = scanVault(vault.root); // debounced on renderer side
+  return { ok: true };
+});
+
+ipcMain.handle('wf:create-note', (e, title, folder, type) => {
+  if (!vault) throw new Error('no vault loaded');
+  const safe = String(title || 'Untitled').replace(/[\\/:*?"<>|]/g, '-').trim() || 'Untitled';
+  const dir = folder && folder !== '.' ? folder : '';
+  let rel = (dir ? dir + '/' : '') + safe + '.md';
+  let full = path.join(vault.root, rel);
+  let k = 1;
+  while (fs.existsSync(full)) { rel = (dir ? dir + '/' : '') + `${safe} ${++k}.md`; full = path.join(vault.root, rel); }
+  fs.mkdirSync(path.dirname(full), { recursive: true });
+  const fm = type ? `---\ntype: ${type}\ntags: []\n---\n\n` : '';
+  fs.writeFileSync(full, `${fm}# ${safe}\n\n`, 'utf8');
+  vault = scanVault(vault.root);
+  return { ok: true, id: rel };
+});
+
+ipcMain.handle('wf:pick-import', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Choose the folder of .md notes to import (e.g. your Obsidian vault)',
+    properties: ['openDirectory'],
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+
+ipcMain.handle('wf:import', (e, srcPath, destFolder) => {
+  if (!vault) throw new Error('no vault loaded');
+  if (!srcPath || !fs.existsSync(srcPath)) throw new Error('source folder not found');
+  const r = importNotes(srcPath, vault.root, destFolder);
+  vault = scanVault(vault.root);
+  return r;
+});
+
+ipcMain.handle('wf:note-titles', () => {
+  if (!vault) return [];
+  return vault.notes.map(n => ({ id: n.id, title: n.title }));
+});
+
+ipcMain.handle('wf:set-type', (e, id, type) => {
+  if (!vault) throw new Error('no vault loaded');
+  const n = vault.notesById.get(id);
+  if (!n) throw new Error('note not found');
+  backupNote(vault.root, id);
+  const raw = fs.readFileSync(n.file, 'utf8');
+  fs.writeFileSync(n.file, setTypeInRaw(raw, type || ''), 'utf8');
+  vault = scanVault(vault.root);
+  return { ok: true, type: type || 'untyped' };
+});
+
+ipcMain.handle('wf:copy-text', (e, text) => { clipboard.writeText(String(text || '')); return { ok: true }; });
+
+ipcMain.handle('wf:delete-note', (e, id) => {
+  if (!vault) throw new Error('no vault loaded');
+  const n = vault.notesById.get(id);
+  if (!n) throw new Error('note not found');
+  backupNote(vault.root, id); // backup copy, then move to .trash (recoverable)
+  const trashDir = path.join(vault.root, '.trash');
+  fs.mkdirSync(trashDir, { recursive: true });
+  let dest = path.join(trashDir, path.basename(n.file));
+  let k = 1;
+  while (fs.existsSync(dest)) {
+    const ext = path.extname(n.file);
+    dest = path.join(trashDir, path.basename(n.file, ext) + ' ' + (k++) + ext);
+  }
+  fs.renameSync(n.file, dest);
+  vault = scanVault(vault.root);
+  return { ok: true, movedTo: dest };
+});
+
+ipcMain.handle('wf:open-path', (e, dir) => {
+  if (dir && fs.existsSync(dir)) { shell.openPath(dir); return { ok: true }; }
+  return { ok: false };
+});

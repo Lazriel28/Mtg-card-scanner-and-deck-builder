@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' vault-asset: data:;">
+<title>WorldForge</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+  <nav id="rail">
+    <div class="brand" title="WorldForge">◆</div>
+    <button class="rail-btn active" data-view="world" title="World (3D graph)">🌐</button>
+    <button class="rail-btn" data-view="cards" title="Cards" disabled>🃏</button>
+    <button class="rail-btn" data-view="maps" title="Maps (M3)" disabled>🗺️</button>
+    <button class="rail-btn" data-view="publish" title="Publish (M4)" disabled>📖</button>
+    <div class="rail-spacer"></div>
+    <button class="rail-btn" id="btn-manual" title="Field manual (help)">❓</button>
+    <button class="rail-btn" id="btn-vault" title="Choose vault folder">📂</button>
+  </nav>
+
+  <main id="main">
+    <section id="view-world" class="view active">
+      <div class="world-hud">
+        <input id="search" placeholder="Search notes…" autocomplete="off">
+        <button id="btn-new" class="hud-btn" title="Create a new note">＋ Note</button>
+        <button id="btn-import" class="hud-btn" title="Import .md notes from another folder">📥 Import</button>
+        <button id="btn-graph-settings" class="hud-btn" title="Graph settings: size, distance, filters">⚙</button>
+        <span id="vault-label" class="muted"></span>
+      </div>
+      <div id="new-note-bar" class="hidden">
+        <input id="nn-title" placeholder="Note title…" autocomplete="off">
+        <select id="nn-type">
+          <option value="">— type —</option>
+          <option>Character</option>
+          <option>Location</option>
+          <option>Item</option>
+          <option>Lore</option>
+        </select>
+        <input id="nn-folder" list="nn-folders" placeholder="folder (optional)">
+        <datalist id="nn-folders"></datalist>
+        <button id="nn-create">Create</button>
+        <button id="nn-cancel" title="Cancel">✕</button>
+      </div>
+      <div id="graph-settings" class="hidden">
+        <div class="gs-title">Graph settings <button id="gs-close" title="Close">✕</button></div>
+        <div class="gs-row"><label>Node size</label><input id="gs-size" type="range" min="0.4" max="2.5" step="0.05"><span class="gs-val" id="gs-size-val"></span></div>
+        <div class="gs-row"><label>Link distance</label><input id="gs-rest" type="range" min="5" max="40" step="1"><span class="gs-val" id="gs-rest-val"></span></div>
+        <div class="gs-row"><label>Repel force</label><input id="gs-rep" type="range" min="200" max="4000" step="50"><span class="gs-val" id="gs-rep-val"></span></div>
+        <div class="gs-sep"></div>
+        <div class="gs-title2">Show</div>
+        <div class="gs-chips">
+          <button class="cat-chip" data-type="character">Character</button>
+          <button class="cat-chip" data-type="location">Location</button>
+          <button class="cat-chip" data-type="item">Item</button>
+          <button class="cat-chip" data-type="lore">Lore</button>
+          <button class="cat-chip" data-type="untyped">Untyped</button>
+          <button class="cat-chip orphan" data-orphans="1">Orphans</button>
+        </div>
+        <div class="gs-hint">Sliders re-layout the world · chips hide whole categories · orphans are notes with no links</div>
+      </div>
+      <div id="scene"></div>
+      <div id="tooltip"></div>
+    </section>
+
+    <section id="view-cards" class="view"><p class="muted pad">Cards arrive in M2 — your notes will appear here grouped by type.</p></section>
+    <section id="view-maps" class="view"><p class="muted pad">Maps arrive in M3.</p></section>
+    <section id="view-publish" class="view"><p class="muted pad">Publish arrives in M4 — one click to a free hosted wiki.</p></section>
+  </main>
+
+  <aside id="note-panel" class="hidden">
+    <div class="np-head">
+      <div>
+        <div id="np-crumb" class="crumb"></div>
+        <h2 id="np-title"></h2>
+      </div>
+      <div class="np-actions">
+        <button id="np-edit">Edit</button>
+        <button id="np-close" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+    <div id="np-tags" class="tags"></div>
+    <div id="np-body" class="np-body"></div>
+    <textarea id="np-raw" class="hidden" spellcheck="false"></textarea>
+    <div id="np-savebar" class="hidden">
+      <span class="muted">Ctrl+S / button saves · backup is made automatically</span>
+      <button id="np-save">Save</button>
+    </div>
+    <div id="np-links"></div>
+  </aside>
+</div>
+<div id="manual-overlay" class="hidden"><iframe id="manual-frame" src="about:blank"></iframe><button id="manual-close" title="Close (Esc)">✕</button></div>
+<script src="vendor/three.min.js"></script>
+<script src="world.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

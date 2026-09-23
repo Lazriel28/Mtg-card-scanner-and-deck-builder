@@ -1,0 +1,17 @@
+{
+  "name": "worldforge",
+  "version": "0.1.0",
+  "description": "Offline worldbuilding, book and cinema studio for Obsidian vaults",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

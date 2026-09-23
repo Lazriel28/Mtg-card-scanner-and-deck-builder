@@ -1,0 +1,10 @@
+node_modules/
+npm-debug.log*
+.freebuff/
+Thumbs.db
+desktop.ini
+Rezvani configs/
+vvd.lnk
+worldforge/demo-vault/.trash/
+worldforge/demo-vault/.worldforge/
+worldforge/demo-vault/imports/
