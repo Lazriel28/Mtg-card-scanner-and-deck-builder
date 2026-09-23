@@ -10,6 +10,7 @@ const { renderMarkdown } = require('./src/md');
 const { importNotes } = require('./src/importer');
 const { setTypeInRaw } = require('./src/types');
 const mtg = require('./src/mtg');
+const tombstones = require('./src/tombstones');
 
 const DATA_DIR = path.join(__dirname, 'data');
 mtg.setDataDir(DATA_DIR); // MTG card index + collection live alongside vault config
@@ -49,6 +50,8 @@ function pruneBackups(dir, keep = 50) {
 }
 
 // Move a note's file to the vault's .trash (with backup first). Recoverable.
+// Records a tombstone so re-import restores it (within the grace window)
+// but doesn't resurrect long-gone notes.
 function trashNote(vaultRoot, n) {
   backupNote(vaultRoot, n.id);
   const trashDir = path.join(vaultRoot, '.trash');
@@ -60,6 +63,7 @@ function trashNote(vaultRoot, n) {
     dest = path.join(trashDir, path.basename(n.file, ext) + ' ' + (k++) + ext);
   }
   fs.renameSync(n.file, dest);
+  try { tombstones.record(vaultRoot, [n.id]); } catch {}
   return dest;
 }
 

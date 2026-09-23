@@ -35,20 +35,24 @@ test('card type detected from frontmatter', () => {
   assert.ok(v.graph.nodes.every(n => 'type' in n));
 });
 
-test('auto-categorize: folder names suggest types when frontmatter is silent', () => {
+test('auto-categorize: note content decides type, folder names are ignored', () => {
   const fs = require('fs'), os = require('os');
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wf-folders-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wf-content-'));
   fs.mkdirSync(path.join(tmp, 'Characters'), { recursive: true });
   fs.mkdirSync(path.join(tmp, 'Locations'), { recursive: true });
-  fs.writeFileSync(path.join(tmp, 'Characters', 'Hero.md'), '# Hero');
-  fs.writeFileSync(path.join(tmp, 'Locations', 'Tavern.md'), '# Tavern');
+  // A character sitting in Locations/ and a location in Characters/: the
+  // folders would mislabel both; the content gets both right.
+  fs.writeFileSync(path.join(tmp, 'Locations', 'Hero.md'),
+    '# Hero\n\nAppearance: tall. Personality: grim. Backstory: born on the road. Goals: survive.');
+  fs.writeFileSync(path.join(tmp, 'Characters', 'Tavern.md'),
+    '# Tavern\n\nPopulation: 12. Located by the river. Notable places: the tap room.');
   fs.writeFileSync(path.join(tmp, 'Random.md'), '# Random');
   const v = scanVault(tmp);
   assert.strictEqual(v.notes.find(n => n.title === 'Hero').type, 'character');
   assert.strictEqual(v.notes.find(n => n.title === 'Tavern').type, 'location');
   assert.strictEqual(v.notes.find(n => n.title === 'Random').type, 'untyped');
-  // explicit frontmatter still wins over folder hints
-  fs.writeFileSync(path.join(tmp, 'Locations', 'Ship.md'), '---\ntype: Item\n---\n# Ship');
+  // explicit frontmatter still wins over content guessing
+  fs.writeFileSync(path.join(tmp, 'Locations', 'Ship.md'), '---\ntype: Item\n---\n# Ship\n\nPopulation of the crew.');
   const v2 = scanVault(tmp);
   assert.strictEqual(v2.notes.find(n => n.title === 'Ship').type, 'item');
 });

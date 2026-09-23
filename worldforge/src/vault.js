@@ -5,25 +5,13 @@
 const fs = require('fs');
 const path = require('path');
 const { extractTags, basenameNoExt, esc } = require('./md');
+const { guessTypeFromContent } = require('./types');
 
 const SKIP_DIRS = new Set(['.obsidian', '.git', '.trash', 'node_modules', '.venv', '.smart-env', 'wiki-site', '.freebuff', '.stfolder']);
 
-// AUTO-CATEGORIZE: when a note has no explicit type:, guess from folder names.
-// Characters/People -> character, Locations/Places -> location, etc.
-const FOLDER_HINTS = [
-  [/^(characters?|people|npcs?|pcs|players)$/, 'character'],
-  [/^(locations?|places|regions?|settlements?|cities|towns|rooms|streets)$/, 'location'],
-  [/^(items?|artifacts?|objects|things|vehicles|weapons)$/, 'item'],
-  [/^(lore|world|history|factions?|religions?|magic|culture)$/, 'lore'],
-];
-function folderType(dirPath) {
-  if (!dirPath || dirPath === '.') return null;
-  for (const seg of String(dirPath).split('/')) {
-    const s = seg.toLowerCase().trim();
-    for (const [re, t] of FOLDER_HINTS) if (re.test(s)) return t;
-  }
-  return null;
-}
+// AUTO-CATEGORIZE: when a note has no explicit type:, the type is guessed
+// from the note's own content (text + tags) — never from its folder name.
+// See guessTypeFromContent in types.js.
 
 function stripFrontmatter(src) {
   if (src.startsWith('---')) {
@@ -99,10 +87,12 @@ function scanVault(root) {
     const body = stripFrontmatter(raw);
     n.body = body;
     n.tags = extractTags(body);
-    // card type: explicit frontmatter wins, then folder name, then untyped
+    // card type: explicit frontmatter wins, then the note's own content,
+    // then untyped. Folder names are deliberately ignored — moving a note
+    // can't change what it is.
     const fm = /^---\n([\s\S]*?)\n---/.exec(raw);
     const tm = fm ? /^type:\s*(.+)$/im.exec(fm[1]) : null;
-    n.type = tm ? tm[1].trim().toLowerCase() : (folderType(n.dir) || 'untyped');
+    n.type = tm ? tm[1].trim().toLowerCase() : (guessTypeFromContent(body, n.tags) || 'untyped');
     n.size = raw.length;
     n.outgoing = [];
     const seen = new Set();

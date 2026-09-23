@@ -1,11 +1,17 @@
 'use strict';
 // WorldForge importer: copies .md notes from any source folder into the
-// working vault (usually an <imports/> subfolder). Duplicate-safe: a file
-// that already exists at the destination is skipped, so re-importing the
-// same folder restores only notes you deleted in between. Never overwrites.
+// working vault (usually an <imports/> subfolder). Duplicate-safe and
+// deletion-aware:
+//   - existing destination files are skipped, never overwritten
+//   - a note deleted in WorldForge recently (7-day tombstone grace) is
+//     restored by re-import — only that note comes back
+//   - notes deleted long ago (in Obsidian or WorldForge) stay gone: the
+//     importer never combs the source for things you removed months back
+//   - empty (0-byte) source files are skipped
 
 const fs = require('fs');
 const path = require('path');
+const tombstones = require('./tombstones');
 
 const SKIP_DIRS = new Set(['.obsidian', '.git', '.trash', 'node_modules', '.worldforge', 'wiki-site', '.freebuff', '.stfolder']);
 
@@ -37,15 +43,29 @@ function importNotes(srcRoot, vaultRoot, destFolder) {
   const rel = (destFolder && String(destFolder).trim()) || 'imports';
   const destRoot = path.join(vaultRoot, rel);
   const files = collectFiles(srcRoot);
-  let imported = 0, renamed = 0, skipped = 0;
+  let imported = 0, skipped = 0;
   for (const f of files) {
     const relPath = path.relative(srcRoot, f);
+    const id = [rel, relPath.split(path.sep).join('/')].join('/');
     const dest = path.join(destRoot, relPath);
     try { fs.mkdirSync(path.dirname(dest), { recursive: true }); } catch { skipped++; continue; }
-    if (fs.existsSync(dest)) { skipped++; continue; } // already imported
-    try { fs.copyFileSync(f, dest); imported++; } catch { skipped++; }
+
+    if (fs.existsSync(dest)) { skipped++; continue; }   // already in the vault
+
+    // Long-gone note: tombstoned beyond the grace window -> never resurrect.
+    if (tombstones.has(vaultRoot, id) && !tombstones.isRecent(vaultRoot, id)) { skipped++; continue; }
+
+    try {
+      if (fs.statSync(f).size === 0) { skipped++; continue; } // empty file, nothing to bring in
+    } catch { skipped++; continue; }
+
+    try {
+      fs.copyFileSync(f, dest);
+      tombstones.clear(vaultRoot, [id]); // alive again; drop any tombstone
+      imported++;
+    } catch { skipped++; }
   }
-  return { imported, renamed, skipped, dest: destRoot, total: files.length };
+  return { imported, skipped, dest: destRoot, total: files.length };
 }
 
 module.exports = { importNotes, collectFiles };

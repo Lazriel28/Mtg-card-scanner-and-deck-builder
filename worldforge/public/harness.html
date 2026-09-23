@@ -201,7 +201,7 @@ function mtgMock() {
     note: async (id) => data.notes[id],
     saveNote: async (id, raw) => { data.notes[id].raw = raw; },
     pickImport: async () => null,
-    importNotes: async () => ({ imported: 0, renamed: 0, skipped: 0, dest: 'imports' }),
+    importNotes: async () => ({ imported: 0, skipped: 0, dest: 'imports' }),
     noteTitles: async () => Object.keys(data.notes).map(id => ({ id, title: data.notes[id].title })),
     setType: async (id, type) => { if (data.notes[id]) data.notes[id].type = (type || 'untyped').toLowerCase(); const nd = data.graph.nodes.find(n => n.id === id); if (nd) nd.type = (type || 'untyped').toLowerCase(); return { ok: true }; },
     copyText: async t => { window.__lastCopy = t; return { ok: true }; },
@@ -217,7 +217,7 @@ function mtgMock() {
     // ---- MTG mock: tiny inline index + localStorage collection ----
     ...(mtgMock()),
   };
-  const V = 'md2';
+  const V = 'tomb1';
   const s = document.createElement('script');
   s.src = 'vendor/three.min.js';
   s.onload = () => {

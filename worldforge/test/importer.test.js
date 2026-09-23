@@ -28,7 +28,6 @@ test('importer copies .md trees, skips hidden/config dirs, never overwrites', ()
   const r2 = importNotes(src, vault, 'imports');
   assert.strictEqual(r2.imported, 0);
   assert.strictEqual(r2.skipped, 2);
-  assert.strictEqual(r2.renamed, 0);
   // originals untouched
   assert.strictEqual(fs.readFileSync(path.join(vault, 'imports', 'Note A.md'), 'utf8'), '# A');
   assert.strictEqual(fs.readFileSync(path.join(vault, 'imports', 'sub', 'Note B.md'), 'utf8'), '# B');

@@ -1,6 +1,6 @@
 # WorldForge — Field Manual
 
-*Version 2.0 · September 23, 2026 · updated with every new feature*
+*Version 2.1 · September 23, 2026 · updated with every new feature*
 
 WorldForge is your offline worldbuilding studio. It reads your Obsidian vault
 directly from disk — nothing is copied, nothing is uploaded, and Obsidian keeps
@@ -25,14 +25,19 @@ Every note in your vault becomes a **sphere** in the 3D world. Color tells you
 
 **How the app decides the type (automatic!):**
 1. An explicit `type:` in the note's frontmatter always wins.
-2. No `type:`? It guesses from the folder name — a note in `Characters/`
-   becomes red, `Locations/` green, `Items/` amber, `Lore/` blue. Imported
-   notes categorize themselves this way too.
-3. Otherwise: untyped gray.
+2. No `type:`? The app **reads the note itself** — its text and its tags —
+   and infers what it is. A character note is recognized by backstory,
+   appearance, goals; a place by population, geography, notable landmarks; a
+   thing by materials, weapons, specifications; lore by history, religion,
+   legends. **Folder names are deliberately ignored** — moving a note between
+   folders can't change what it is.
+3. Not enough signal? Untyped gray — the right-click → Set type menu is
+   always there.
 
 Case doesn't matter (`character`, `CHARACTER` all work). Unknown values are
 kept as their own color — you're free to invent types like `artifact` or
-`beast`.
+`beast`. A `#character` / `#location` / `#item` / `#lore` tag on the note
+makes the guess near-certain.
 
 **Size:** bigger sphere = more links to/from it. Hub notes (like your index)
 naturally grow large — the biggest spheres are your load-bearing lore.
@@ -137,15 +142,21 @@ The **📥 Import** button copies notes from any folder on your PC straight into
 your vault's **`imports/`** folder (subfolder structure preserved).
 
 **Duplicates are never created.** If a file already exists at the destination,
-it is **skipped** — not renamed, not overwritten. This makes re-import a
-*repair* tool:
+it is **skipped** — not renamed, not overwritten. And the importer is
+**deletion-aware**: every WorldForge delete leaves a dated tombstone in your
+vault (`.worldforge/tombstones.json`), and the importer reads it:
 
-- Import the same folder twice → the second run imports **0** notes ("skipped"
-  count shows what was already there).
-- Import, delete a few notes (even accidentally), re-import → **only the
-  missing notes come back.** Everything else stays untouched.
+- Import the same folder twice → the second run imports **0** notes.
+- Import, delete a few notes in WorldForge, re-import → **only the recently
+  deleted notes come back** (7-day grace window).
+- Notes deleted long ago — in Obsidian or anywhere else — **stay gone.**
+  Re-importing never combs the source to resurrect months-old deletions; a
+  tombstone past its grace window means *never bring this back*.
 - Edited a note after importing? The importer won't clobber your edits — the
   existing file always wins.
+
+If you ever want something back that the importer refuses to resurrect, it's
+still in your vault's `.trash/` (with a backup in `.worldforge/backups/`).
 
 Hidden/config folders (`.obsidian`, `.git`, `.trash`, …) are skipped, and the
 importer refuses to run when the chosen folder is the vault itself — otherwise
@@ -210,9 +221,9 @@ drop cards (with the same type-as-you-type suggestions), tap them, stack
 
 Before the duplicate-safe importer (v2.0), re-importing renamed collisions
 (`Note 2.md`). One-time cleanup: click **🗑 Mass delete → Select duplicates →
-Delete selected**, then **📥 Import** the original folder again — the missing
-originals come back, the duplicates are gone, and re-imports from now on never
-create duplicates at all.
+Delete selected**. If a duplicate replaced a note you actually wanted, delete
+the clone and re-import *within 7 days of that deletion* — only the missing
+original returns. Tombstones older than 7 days are never resurrected.
 
 ---
 

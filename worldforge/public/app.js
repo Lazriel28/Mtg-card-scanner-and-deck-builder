@@ -182,8 +182,7 @@
       world = null; $('scene').innerHTML = '';
       await refreshGraph();
       alert(`Imported ${r.imported} note${r.imported === 1 ? '' : 's'} into "imports"` +
-        (r.renamed ? ` (${r.renamed} renamed to avoid overwriting)` : '') +
-        (r.skipped ? ` — ${r.skipped} skipped` : ''));
+        (r.skipped ? ` — ${r.skipped} skipped (already present, empty, or deleted long ago)` : ''));
     } catch (err) { alert('Import failed: ' + (err.message || err)); }
   });
 
