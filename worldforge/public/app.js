@@ -51,6 +51,7 @@
   // one remount path — the single place the world is (re)built
   async function mountWorld() {
     const view = world && world.getView ? world.getView() : null;
+    const layout = await window.wf.getLayout();
     $('scene').innerHTML = '';
     world = World3D.mount($('scene'), graph, {
       tooltipEl: $('tooltip'),
@@ -60,10 +61,25 @@
       onCanvasMenu: (e) => showCanvasMenu(e.clientX, e.clientY),
       settings: { nodeScale: gs.size, rep: gs.rep, rest: gs.rest },
       initialView: view,
+      initialLayout: layout,
+      onSaveLayout: (l) => window.wf.saveLayout({ nodes: l.nodes }),
+      onUnpin: (ids) => window.wf.unpinLayout(ids),
+      onDelete: deleteNotes,
     });
     world.setFilters({ types: gs.types, orphans: gs.orphans });
     world.highlight(searchQuery);            // search survives rescans
     window.__wfWorld = world;                // test/debug handle
+  }
+
+  // batch delete with confirm + flash; used by mass-delete and world selection
+  async function deleteNotes(ids) {
+    if (!ids || !ids.length) return;
+    const label = ids.length === 1 ? `“${String(ids[0]).split('/').pop().replace(/\.md$/, '')}”` : `${ids.length} notes`;
+    if (!confirm(`Delete ${label}? It goes to .trash — recoverable.`)) return;
+    const r = await window.wf.deleteNotes(ids);
+    const moved = r && r.moved ? r.moved.length : ids.length;
+    alert(`Deleted ${moved} note${moved === 1 ? '' : 's'} — in .trash, recoverable.`);
+    await refreshGraph();
   }
 
   // ---------- note panel ----------
@@ -134,10 +150,20 @@
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       if (!$('manual-overlay').classList.contains('hidden')) closeManual();
+      else if (world && world.handleKey && world.handleKey(e)) return; // world consumed Esc
       else $('note-panel').classList.add('hidden');
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && !$('np-savebar').classList.contains('hidden')) {
       e.preventDefault(); save();
+    }
+  });
+
+  // world hotkeys — single dispatch point, skipped while typing in inputs
+  document.addEventListener('keydown', e => {
+    if (e.defaultPrevented) return;
+    const k = e.key.toLowerCase();
+    if (['g', 'r', 's', 'a', 'delete', 'backspace'].includes(k) || e.key === 'Delete' || e.key === 'Backspace') {
+      if (world && world.handleKey && world.handleKey(e)) e.preventDefault();
     }
   });
   on('np-save', 'click', save);
@@ -296,6 +322,11 @@
         label: t, color: TYPE_COLORS[t], action: () => setTypeFor(u.id, t),
       })),
       { label: 'Untyped (clear)', danger: true, action: () => setTypeFor(u.id, '') },
+      { sep: true },
+      { label: u.pinned ? '📌 Unpin (release node)' : '📌 Pin in place', action: () => {
+        if (u.pinned) world.unpinAt(u.id);
+        else world.pinAt(u.id);
+      } },
       { sep: true },
       { label: 'Delete note…', danger: true, action: () => {
         if (confirm('Delete "' + u.title + '"?\n\nIt moves to your vault\'s .trash folder — nothing is hard-deleted, and a backup is made first.')) deleteNoteById(u.id);

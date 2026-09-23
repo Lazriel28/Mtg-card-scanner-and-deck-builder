@@ -52,7 +52,7 @@ naturally grow large — the biggest spheres are your load-bearing lore.
 | Zoom in / out | **Mouse wheel** |
 | Slide the camera sideways (pan) | **Right-drag** |
 | Inspect a note without opening it | **Hover** the sphere — a preview card appears with the note's name, type, folder, and a text snippet |
-| Open a note | **Click** the sphere — the note panel slides out on the right |
+| Open a note | **Double-click** the sphere — the note panel slides out on the right (single-click now *selects* — see §2b) |
 | **Right-click a sphere** | Full menu: open, edit, copy `[[wikilink]]`, reveal in folder, **set type** (recolors instantly), delete (moves to `.trash`, recoverable) |
 | **Right-click empty space** | Rebuild graph, reset view, import notes, choose vault |
 | **Right-click a link in a note** | Open it, copy it, or — if it's a broken link — **create the missing note** right there |
@@ -60,6 +60,51 @@ naturally grow large — the biggest spheres are your load-bearing lore.
 
 Small but important: a click only counts as a click — if you dragged to rotate,
 release won't accidentally open a note.
+
+---
+
+## 2b. Arranging the world — select, move, pin (Blender-style)
+
+The world is not just a picture — you can arrange it. Hand-placed positions are
+saved to `.worldforge/layout.json` inside your vault and survive restarts and
+rescans.
+
+### Selecting
+
+- **Click a sphere** — selects it (turns warm yellow) and shows the selection
+  panel (bottom-left). Note: this *replaces* the old "click opens the note" —
+  use **double-click** to open, or the **Open** button on the panel.
+- **Shift/Ctrl + click** — add to or remove from the selection.
+- **Drag on empty space** — draws a box; everything inside gets selected.
+  Hold Shift/Ctrl to add to the current selection. **Esc** aborts a box and
+  restores what was selected before.
+- **A** — select every visible node. **Esc** — deselect all.
+
+### Moving
+
+- **Drag a selected node** — it moves on a camera-facing plane, and its links
+  stretch with it live. Dragging an unselected node selects it first; dragging
+  one member of a multi-selection moves the whole group.
+- **G** (grab) — the selection follows your mouse; click or **Enter** to keep,
+  **Esc** to cancel.
+- **R** — rotate the selection around its center (move mouse sideways;
+  click/Enter keeps, Esc cancels).
+- **S** — scale the selection's spread (same confirm/cancel).
+- **Delete/Backspace** — trash the selected notes (with confirm; recoverable
+  from `.trash`/backups).
+
+### Keeping your arrangement
+
+After any move the panel's button becomes **💾 Save positions** — one click
+stores every node's place. Until you save, a rescan/rebuild re-arranges the
+world; after saving, your placed nodes come back exactly where you left them,
+even after closing the app.
+
+- **📌 Pin in place** — saves the current positions of everything.
+- **📌 Unpin (release)** — frees the selected nodes back to the force layout.
+- Saved pins are drawn with a subtle green tint, so you can see what stays put.
+- Notes deleted from the vault lose their pins automatically; recreated notes
+  start fresh.
 
 ---
 

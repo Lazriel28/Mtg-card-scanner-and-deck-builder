@@ -228,3 +228,32 @@ button, [role="button"], input, select, textarea { min-height: 24px; }
 .bf-card .cnt { position:absolute; top:-7px; right:-7px; background:#d29922; color:#000; border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:11px; }
 .bf-card .ctrl { display:flex; gap:4px; margin-top:4px; }
 .bf-card .ctrl button { flex:1; background:#21262d; color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:10px; cursor:pointer; padding:2px 0; }
+
+/* ---------- world selection & transforms ---------- */
+#sel-panel {
+  position: absolute; left: 12px; bottom: 12px; z-index: 30;
+  background: #161b22; border: 1px solid var(--border, #30363d);
+  border-radius: 8px; padding: 10px 12px; max-width: 440px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+#sel-title { font-weight: 600; margin-bottom: 2px; }
+#sel-panel .sel-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+#sel-panel .sel-actions .hud-btn { font-size: 12px; padding: 4px 10px; min-height: 24px; }
+#sel-panel .hud-btn.danger { color: #ff7b72; }
+#sel-panel .hud-btn.primary, #xform-modal .hud-btn.primary { background: #1f6feb; color: #fff; }
+#sel-panel .hud-btn.primary:hover, #xform-modal .hud-btn.primary:hover { background: #388bfd; }
+
+#xform-modal {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 40;
+  background: #161b22; border: 1px solid #1f6feb; border-radius: 8px;
+  padding: 10px 14px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+#xf-title { font-weight: 600; }
+#xf-hint { font-size: 12px; margin-top: 2px; }
+#xform-modal .sel-actions { display: flex; gap: 6px; margin-top: 8px; justify-content: center; }
+#xform-modal .hud-btn { font-size: 12px; padding: 4px 10px; min-height: 24px; }
+
+#box-rect {
+  position: fixed; z-index: 35; pointer-events: none;
+  border: 1px solid #58a6ff; background: rgba(88, 166, 255, 0.12);
+}

@@ -12,6 +12,7 @@ const { setTypeInRaw } = require('./src/types');
 const mtg = require('./src/mtg');
 const tombstones = require('./src/tombstones');
 const mapsStore = require('./src/maps');
+const layoutStore = require('./src/layout');
 const { exportSite } = require('./src/export');
 
 const DATA_DIR = path.join(__dirname, 'data');
@@ -235,6 +236,23 @@ const wrap = fn => async (e, ...args) => {
   try { return { ok: true, data: await fn(...args) }; }
   catch (err) { return { ok: false, error: String(err.message || err) }; }
 };
+
+// ---------- World layout (pinned node positions) ----------
+// <vault>/.worldforge/layout.json — hand-placed node positions survive
+// rescans and restarts. normalizeLayout drops entries for deleted notes.
+// Raw return values (no wrap envelope) — the world consumes them directly.
+ipcMain.handle('wf:get-layout', () => {
+  if (!vault) throw new Error('no vault loaded');
+  return layoutStore.normalizeLayout(vault.graph, layoutStore.load(vault.root));
+});
+ipcMain.handle('wf:save-layout', (e, l) => {
+  if (!vault) throw new Error('no vault loaded');
+  return layoutStore.save(vault.root, layoutStore.pinNodes(layoutStore.load(vault.root), l.nodes));
+});
+ipcMain.handle('wf:unpin-layout', (e, ids) => {
+  if (!vault) throw new Error('no vault loaded');
+  return layoutStore.save(vault.root, layoutStore.unpinNodes(layoutStore.load(vault.root), ids));
+});
 
 // ---------- Maps ----------
 ipcMain.handle('maps:list', wrap(() => {

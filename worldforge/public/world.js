@@ -1,5 +1,11 @@
 'use strict';
-// WorldForge world view: 3D force-directed graph (global THREE from vendored bundle).
+// WorldForge world view: interactive 3D graph (global THREE from vendored bundle).
+// Interaction model (Blender-flavored):
+//   click node = select · shift/ctrl+click = add/remove · drag node = move
+//   drag empty space = box-select · click empty = deselect · dblclick = open
+//   G/R/S = move/rotate/scale the selection · A = select all visible
+//   Delete = trash selection · Esc = cancel/deselect
+// Hand-placed positions ("pins") persist via handlers.onSaveLayout (layout.json).
 
 (function () {
   function esc(s) {
@@ -9,6 +15,9 @@
     character: 0xe5484d, location: 0x46a758, item: 0xf5a623,
     lore: 0x3b82f6, untyped: 0x8b949e,
   };
+  const SEL_COLOR = 0xffe08a;
+  const HOVER_COLOR = 0xfff2cc; // hover tint (distinct from selection)
+  const PIN_COLOR = 0xd3f9d8; // subtle "this node stays put" tint on unselected pins
 
   function hashColor(s) {
     let h = 0;
@@ -107,6 +116,11 @@
 
     const S = handlers.settings || {};
     const { nodes, links } = layout(graph, { rep: S.rep, rest: S.rest });
+
+    // ---- hand-placed positions ("pins") — applied to layout coords BEFORE
+    // edges are built, so lines match the placed meshes. (Algebra: src/layout.js)
+    const pins = handlers.initialLayout && handlers.initialLayout.nodes ? handlers.initialLayout.nodes : {};
+
     const metaById = new Map(graph.nodes.map(n => [n.id, n]));
     const nodeObjs = [];
     const group = new THREE.Group();
@@ -119,8 +133,13 @@
         new THREE.MeshStandardMaterial({ color: colorFor(meta), roughness: 0.45, metalness: 0.1, transparent: true, opacity: 1 })
       );
       mesh.scale.setScalar(S.nodeScale || 1);
+      const pin = pins[n.id];
+      if (pin) { n.x = pin.x; n.y = pin.y; n.z = pin.z; }
       mesh.position.set(n.x, n.y, n.z);
-      mesh.userData = { id: n.id, title: meta.title || n.id, type: meta.type || 'untyped', dir: meta.dir || '.', deg: n.deg };
+      mesh.userData = {
+        id: n.id, title: meta.title || n.id, type: meta.type || 'untyped', dir: meta.dir || '.', deg: n.deg,
+        color: colorFor(meta), pinned: !!pin, selected: false,
+      };
       group.add(mesh);
       nodeObjs.push(mesh);
     }
@@ -140,18 +159,198 @@
     }
     const byMesh = new Map(nodeObjs.map(m => [m.userData.id, m]));
 
-    // ---- custom orbit controls (drag=rotate, wheel=zoom, right-drag=pan) ----
+    function updateEdgePositions() {
+      for (const e of edgeObjs) {
+        const a = byMesh.get(e.userData.a), b = byMesh.get(e.userData.b);
+        if (!a || !b) continue;
+        const arr = e.geometry.attributes.position.array;
+        arr[0] = a.position.x; arr[1] = a.position.y; arr[2] = a.position.z;
+        arr[3] = b.position.x; arr[4] = b.position.y; arr[5] = b.position.z;
+        e.geometry.attributes.position.needsUpdate = true;
+      }
+    }
+
+    // ================= selection =================
+    const selPanel = document.getElementById('sel-panel');
+    const selTitle = document.getElementById('sel-title');
+    const selMeta = document.getElementById('sel-meta');
+    const selPinBtn = document.getElementById('sel-pin');
+    const xformModal = document.getElementById('xform-modal');
+    const xfTitle = document.getElementById('xf-title');
+    const xfHint = document.getElementById('xf-hint');
+
+    let pinDirty = false;           // positions moved since last save/unpin
+    function selectedMeshes() { return nodeObjs.filter(m => m.userData.selected); }
+
+    function paintMesh(m) {
+      if (m === hoverMesh) return; // hover tint wins; restored on hover-out
+      if (m.userData.selected) m.material.color.setHex(SEL_COLOR);
+      else if (m.userData.pinned) m.material.color.setHex(PIN_COLOR);
+      else m.material.color.setHex(m.userData.color);
+    }
+    function repaintAll() { for (const m of nodeObjs) paintMesh(m); }
+
+    function updateSelPanel() {
+      const sel = selectedMeshes();
+      if (!sel.length && !pinDirty) { selPanel.classList.add('hidden'); return; }
+      if (!sel.length) {
+        selTitle.textContent = 'Positions changed';
+        selMeta.textContent = '💾 Save positions keeps your arrangement · Pin re-adds it later';
+      } else {
+        selTitle.textContent = sel.length > 1 ? `${sel.length} nodes selected` : sel[0].userData.title;
+        selMeta.textContent = sel.length > 1
+          ? 'G move · R rotate · S scale · Del delete · Esc deselect'
+          : `${sel[0].userData.type}${sel[0].userData.pinned ? ' · pinned' : ''} · drag to move · G/R/S · double-click to open`;
+      }
+      selPinBtn.textContent = pinDirty ? '💾 Save positions'
+        : (sel.every(m => m.userData.pinned) ? '📌 Unpin (release)' : '📌 Pin in place');
+      selPanel.classList.remove('hidden');
+    }
+
+    function setSelection(list) {
+      for (const m of nodeObjs) m.userData.selected = false;
+      for (const m of list) m.userData.selected = true;
+      repaintAll();
+      updateSelPanel();
+    }
+    function toggleSel(m) {
+      m.userData.selected = !m.userData.selected;
+      repaintAll(); updateSelPanel();
+    }
+    function deselectAll() {
+      if (selectedMeshes().length) setSelection([]);
+    }
+
+    // ================= transforms (G/R/S) =================
+    const xf = { mode: null, objs: [], had: [], center: null, start: null, moved: false };
+    function centerOf(list) {
+      const box = new THREE.Box3();
+      for (const m of list) box.expandByObject(m);
+      return box.getCenter(new THREE.Vector3());
+    }
+    function startTransform(mode) {
+      const sel = selectedMeshes();
+      if (!sel.length || xf.mode) return false;
+      xf.mode = mode; xf.objs = sel; xf.moved = false;
+      xf.had = sel.map(m => m.position.clone());
+      xf.center = centerOf(sel);
+      xf.start = null; // anchor set on first mouse move
+      xfTitle.textContent = mode === 'rotate' ? 'Rotate' : mode === 'scale' ? 'Scale' : 'Move';
+      xfHint.textContent = mode === 'rotate' ? 'Move mouse sideways to rotate · click / Done to keep · Esc cancels'
+        : mode === 'scale' ? 'Move mouse sideways to scale · click / Done to keep · Esc cancels'
+        : 'Move the mouse — the selection follows · click / Done to keep · Esc cancels';
+      xformModal.classList.remove('hidden');
+      return true;
+    }
+    function transformMousemove(e) {
+      if (!xf.mode) return;
+      if (xf.start === null) { xf.start = { x: e.clientX, y: e.clientY }; return; }
+      const dx = e.clientX - xf.start.x;
+      if (xf.mode === 'move') {
+        if (xf.grabPlane) {
+          const hit = rayOnPlane(e, xf.grabPlane);
+          if (hit) {
+            const delta = hit.clone().sub(xf.grabPoint);
+            for (let i = 0; i < xf.objs.length; i++) xf.objs[i].position.copy(xf.had[i]).add(delta);
+          }
+        }
+      } else if (xf.mode === 'rotate') {
+        const ang = dx * 0.01;
+        const axis = camera.getWorldDirection(new THREE.Vector3()).negate();
+        for (let i = 0; i < xf.objs.length; i++) {
+          const p = xf.had[i].clone().sub(xf.center).applyAxisAngle(axis, ang);
+          xf.objs[i].position.copy(xf.center).add(p);
+        }
+      } else if (xf.mode === 'scale') {
+        const sc = Math.max(0.05, 1 + dx * 0.008);
+        for (let i = 0; i < xf.objs.length; i++) {
+          const p = xf.had[i].clone().sub(xf.center).multiplyScalar(sc);
+          xf.objs[i].position.copy(xf.center).add(p);
+        }
+      }
+      updateEdgePositions();
+      xf.moved = true;
+    }
+    function commitTransform() {
+      if (!xf.mode) return false;
+      if (xf.moved) markMoved(xf.objs);
+      xf.mode = null; xf.grabPlane = null;
+      xformModal.classList.add('hidden');
+      return true;
+    }
+    function cancelTransform() {
+      if (!xf.mode) return false;
+      for (let i = 0; i < xf.objs.length; i++) xf.objs[i].position.copy(xf.had[i]);
+      updateEdgePositions();
+      xf.mode = null; xf.grabPlane = null;
+      xformModal.classList.add('hidden');
+      return true;
+    }
+
+    // ================= persistence =================
+    const movedNodes = new Set();
+    function markMoved(objs) {
+      for (const m of objs || []) movedNodes.add(m.userData.id);
+      if (!pinDirty) { pinDirty = true; updateSelPanel(); }
+    }
+    function savePinState() {
+      const out = {};
+      for (const m of nodeObjs) out[m.userData.id] = { x: m.position.x, y: m.position.y, z: m.position.z };
+      if (handlers.onSaveLayout) Promise.resolve(handlers.onSaveLayout({ nodes: out })).then(() => {
+        pinDirty = false;
+        movedNodes.clear();
+        // every position was saved, so every node is now pinned — this matches
+        // exactly what a remount would restore from the store
+        for (const m of nodeObjs) m.userData.pinned = true;
+        repaintAll(); updateSelPanel();
+      }).catch(() => {});
+    }
+    function unpinSelection() {
+      const sel = selectedMeshes();
+      if (!sel.length) return;
+      if (handlers.onUnpin) handlers.onUnpin(sel.map(m => m.userData.id));
+      for (const m of sel) { m.userData.pinned = false; movedNodes.delete(m.userData.id); }
+      pinDirty = false;
+      repaintAll(); updateSelPanel();
+    }
+    function deleteSelection() {
+      const sel = selectedMeshes();
+      if (!sel.length || !handlers.onDelete) return;
+      const ids = sel.map(m => m.userData.id);
+      setSelection([]);
+      handlers.onDelete(ids);
+    }
+
+    // ================= pointer machinery =================
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const dom = renderer.domElement;
+
+    function setRay(e) {
+      // canvas-relative coords (the sidebar shifts clientX — see hover note below)
+      const r = dom.getBoundingClientRect();
+      mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+      mouse.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+    }
+    function rayOnPlane(e, plane) {
+      setRay(e);
+      const hit = new THREE.Vector3();
+      return raycaster.ray.intersectPlane(plane, hit) ? hit : null;
+    }
+    function pick(e) {
+      setRay(e);
+      return raycaster.intersectObjects(nodeObjs.filter(m => m.visible))[0] || null;
+    }
+
+    // orbit state (unchanged behavior)
     let theta = 0.9, phi = 1.15, radius = 78;
     const target = new THREE.Vector3(0, 0, 0);
-    // restore a previous view across re-mounts (saves/rescans)
     if (handlers.initialView && handlers.initialView.theta !== undefined) {
       const v = handlers.initialView;
       theta = v.theta; phi = v.phi; radius = v.radius;
       target.set(v.target.x, v.target.y, v.target.z);
     }
-    let dragging = 0, px = 0, py = 0, movedPx = 0;
-    const dom = renderer.domElement;
-
     function applyCamera() {
       const sp = Math.sin(phi), cp = Math.cos(phi);
       camera.position.set(
@@ -160,33 +359,126 @@
         target.z + radius * sp * Math.cos(theta));
       camera.lookAt(target);
     }
-    dom.addEventListener('contextmenu', e => {
-      e.preventDefault();
-      const hit = pick(e);
-      try { dom.releasePointerCapture(e.pointerId); } catch {}
-      dragging = 0;
-      if (hit && handlers.onNodeMenu) handlers.onNodeMenu(e, hit.object.userData);
-      else if (handlers.onCanvasMenu) handlers.onCanvasMenu(e);
-    });
+
+    // pointer interaction state machine
+    // mode: null | 'orbit' | 'pan' | 'maybe-node' | 'node-drag' | 'maybe-box' | 'box'
+    let mode = null, px = 0, py = 0, movedPx = 0;
+    let downHit = null;
+    const drag = { objs: [], had: [], plane: null, grabPoint: null, primed: null };
+    const box = { div: null, x0: 0, y0: 0, base: [] };
+    let hoverMesh = null;
+
+    function beginNodeDrag(e, objs) {
+      const center = centerOf(objs);
+      drag.plane = new THREE.Plane();
+      drag.plane.setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()).negate(), center);
+      const hit = rayOnPlane(e, drag.plane);
+      drag.grabPoint = hit || center;
+      drag.objs = objs;
+      drag.had = objs.map(m => m.position.clone());
+      mode = 'node-drag';
+      dom.style.cursor = 'grabbing';
+    }
+    function nodeDragMove(e) {
+      const hit = rayOnPlane(e, drag.plane);
+      if (!hit) return;
+      const delta = hit.clone().sub(drag.grabPoint);
+      for (let i = 0; i < drag.objs.length; i++) drag.objs[i].position.copy(drag.had[i]).add(delta);
+      updateEdgePositions();
+    }
+    function endInteractions() {
+      if (mode === 'node-drag') {
+        if (movedPx > 5) markMoved(drag.objs);
+        dom.style.cursor = hoverMesh ? 'pointer' : 'default';
+      }
+      if (box.div) { box.div.remove(); box.div = null; }
+      if (mode === 'box') dom.style.cursor = 'default';
+      mode = null;
+    }
+
+    // box-select rect (fixed coords; lives in container so remount cleans up)
+    function boxRectShow(x0, y0, x1, y1) {
+      if (!box.div) {
+        box.div = document.createElement('div');
+        box.div.id = 'box-rect';
+        container.appendChild(box.div);
+      }
+      const cr = container.getBoundingClientRect(); // client → container-local
+      box.div.style.left = (Math.min(x0, x1) - cr.left) + 'px';
+      box.div.style.top = (Math.min(y0, y1) - cr.top) + 'px';
+      box.div.style.width = Math.abs(x1 - x0) + 'px';
+      box.div.style.height = Math.abs(y1 - y0) + 'px';
+    }
+    function screenPos(m) {
+      const v = m.position.clone().project(camera);
+      const r = dom.getBoundingClientRect();
+      return { x: (v.x * 0.5 + 0.5) * r.width + r.left, y: (-v.y * 0.5 + 0.5) * r.height + r.top, z: v.z };
+    }
+    function nodesInBox(x0, y0, x1, y1) {
+      const L = Math.min(x0, x1), R = Math.max(x0, x1), T = Math.min(y0, y1), B = Math.max(y0, y1);
+      return nodeObjs.filter(m => {
+        if (!m.visible) return false;
+        const p = screenPos(m);
+        return p.z < 1 && p.x >= L && p.x <= R && p.y >= T && p.y <= B;
+      });
+    }
+
     dom.addEventListener('pointerdown', e => {
       cancelFly();
-      dragging = e.button === 2 ? 2 : 1; px = e.clientX; py = e.clientY; movedPx = 0;
+      px = e.clientX; py = e.clientY; movedPx = 0;
       try { dom.setPointerCapture(e.pointerId); } catch {}
+
+      if (xf.mode) { commitTransform(); return; }         // click confirms G/R/S
+      if (e.button === 2) { mode = 'pan'; return; }        // right = pan (menu on contextmenu)
+      if (e.button !== 0) return;
+
+      const hit = pick(e);
+      downHit = hit;
+      if (hit) {
+        mode = 'maybe-node';
+        // dragging a selected node moves the whole selection; an unselected one
+        // promotes itself to the selection once the drag actually starts
+        drag.primed = hit.object.userData.selected ? selectedMeshes() : null;
+      } else {
+        mode = 'maybe-box';
+        box.x0 = e.clientX; box.y0 = e.clientY;
+        box.base = selectedMeshes().map(m => m.userData.id); // Esc restores this
+      }
     });
-    dom.addEventListener('pointerup', e => { dragging = 0; try { dom.releasePointerCapture(e.pointerId); } catch {} });
-    dom.addEventListener('pointercancel', e => { dragging = 0; try { dom.releasePointerCapture(e.pointerId); } catch {} });
-    // If a native dialog (confirm/alert) eats the pointerup, the capture would
-    // stick forever — every later click would land on the canvas. The window-
-    // level listener below resets drag state no matter who swallowed the release.
-    window.addEventListener('pointerup', () => { dragging = 0; }, true);
+
     dom.addEventListener('pointermove', e => {
-      if (!dragging) { hover(e); return; }
+      if (!mode) { hover(e); return; }
       const dx = e.clientX - px, dy = e.clientY - py; px = e.clientX; py = e.clientY;
       movedPx += Math.abs(dx) + Math.abs(dy);
-      if (dragging === 1) {
+
+      if (mode === 'maybe-node' && movedPx > 5) {
+        // mouse-down on a node then move = drag the (pre-existing or hit) selection
+        const objs = drag.primed || [downHit.object];
+        if (!drag.primed) setSelection([downHit.object]);
+        beginNodeDrag(e, objs);
+        nodeDragMove(e);
+        return;
+      }
+      if (mode === 'node-drag') { nodeDragMove(e); return; }
+
+      if (mode === 'maybe-box' && movedPx > 5) { mode = 'box'; dom.style.cursor = 'crosshair'; }
+      if (mode === 'box') {
+        boxRectShow(box.x0, box.y0, e.clientX, e.clientY);
+        const inBox = nodesInBox(box.x0, box.y0, e.clientX, e.clientY);
+        const base = e.shiftKey || e.ctrlKey ? selectedMeshes() : [];
+        const ids = new Set([...base, ...inBox].map(m => m.userData.id));
+        for (const m of nodeObjs) {
+          m.userData.selected = ids.has(m.userData.id);
+          paintMesh(m);
+        }
+      } else if (mode === 'maybe-box') {
+        // tiny wiggle before box activates: treat as orbit
+        mode = 'orbit';
+      }
+      if (mode === 'orbit') {
         theta -= dx * 0.0055;
         phi = Math.max(0.08, Math.min(Math.PI - 0.08, phi - dy * 0.005));
-      } else {
+      } else if (mode === 'pan') {
         const panScale = radius * 0.0012;
         const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
         const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
@@ -194,35 +486,104 @@
         target.addScaledVector(up, dy * panScale * 0.6);
       }
     });
+
+    function finishPointer(e) {
+      const wasMode = mode;
+      endInteractions();
+      if (!e) return;
+      const additive = e.shiftKey || e.ctrlKey;
+
+      if (wasMode === 'maybe-node' && movedPx <= 5 && downHit) {
+        const m = downHit.object;
+        if (additive) toggleSel(m); else setSelection([m]);
+        return;
+      }
+      if (wasMode === 'maybe-box' && movedPx <= 5) deselectAll();
+      // 'box' success: selection was painted live; 'node-drag': Pin panel shows "Save positions"
+    }
+    dom.addEventListener('pointerup', e => finishPointer(e));
+    dom.addEventListener('pointercancel', () => { cancelTransform(); endInteractions(); });
+    // If a native dialog eats pointerup, no event fires at all — this bubble-phase
+    // window listener resets state on the next pointerup anywhere, so a stuck
+    // drag can never wedge the app.
+    window.addEventListener('pointerup', () => endInteractions(), false);
+    window.addEventListener('pointermove', e => { if (xf.mode) transformMousemove(e); });
+
+    dom.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      try { dom.releasePointerCapture(e.pointerId); } catch {}
+      const was = mode; endInteractions();
+      if (was === 'pan') return; // right-drag panned; don't also open the menu
+      const hit = pick(e);
+      if (hit && handlers.onNodeMenu) handlers.onNodeMenu(e, hit.object.userData);
+      else if (handlers.onCanvasMenu) handlers.onCanvasMenu(e);
+    });
+
+    dom.addEventListener('dblclick', e => {
+      const hit = pick(e);
+      if (hit && handlers.onOpen) handlers.onOpen(hit.object.userData.id);
+    });
+
     dom.addEventListener('wheel', e => {
       e.preventDefault();
       cancelFly();
       radius = Math.max(6, Math.min(220, radius * (e.deltaY > 0 ? 1.12 : 0.89)));
     }, { passive: false });
 
-    // ---- picking & hover ----
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    const tooltip = handlers.tooltipEl;
-
-    function pick(e) {
-      // CRITICAL: coordinates are relative to the canvas, not the page —
-      // the sidebar shifts clientX, which broke hover/click alignment.
-      const r = dom.getBoundingClientRect();
-      mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1;
-      mouse.y = -((e.clientY - r.top) / r.height) * 2 + 1;
-      raycaster.setFromCamera(mouse, camera);
-      return raycaster.intersectObjects(nodeObjs.filter(m => m.visible))[0] || null;
+    // ---- keyboard (G/R/S/A/Del/Esc) — returns true when consumed ----
+    function handleKey(e) {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return false;
+      const modalOpen = !xformModal.classList.contains('hidden');
+      if (e.key === 'Escape') {
+        if (modalOpen) return cancelTransform();
+        if (mode === 'box' || box.div) {
+          // abort box-select: restore what was selected before the drag began
+          endInteractions();
+          setSelection(box.base.map(id => byMesh.get(id)).filter(Boolean));
+          return true;
+        }
+        deselectAll();
+        return selectedMeshes().length > 0;
+      }
+      const k = e.key.toLowerCase();
+      if (modalOpen && (k === 'enter' || k === 'g' || k === 'r' || k === 's')) return commitTransform();
+      const sel = selectedMeshes();
+      if (k === 'g' && sel.length) {
+        // Blender-style grab: selection follows the mouse on the camera-facing
+        // plane through the selection center; click or Enter keeps it.
+        const center = centerOf(sel);
+        const plane = new THREE.Plane();
+        plane.setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()).negate(), center);
+        startTransform('move');
+        xf.grabPlane = plane;
+        xf.grabPoint = center.clone();
+        return true;
+      }
+      if (k === 'r' && sel.length) return startTransform('rotate');
+      if (k === 's' && sel.length) return startTransform('scale');
+      if ((e.key === 'Delete' || e.key === 'Backspace') && sel.length) { deleteSelection(); return true; }
+      if (k === 'a' && !e.ctrlKey && !e.metaKey) { setSelection(nodeObjs.filter(m => m.visible)); return true; }
+      return false;
     }
 
-    let hoverId = null;
+    // ---- hover (uses pick; keeps selection tinting coherent) ----
+    const tooltip = handlers.tooltipEl;
     const previewCache = new Map();
+    let hoverId = null;
     function hover(e) {
       const hit = pick(e);
-      const id = hit ? hit.object.userData.id : null;
-      if (hit) {
-        dom.style.cursor = 'pointer';
-        const u = hit.object.userData;
+      const m = hit ? hit.object : null;
+      if (m !== hoverMesh) {
+        const prev = hoverMesh;
+        hoverMesh = m;
+        if (prev) paintMesh(prev);
+        if (m) { m.material.color.setHex(HOVER_COLOR); dom.style.cursor = 'pointer'; }
+        else dom.style.cursor = 'default';
+      }
+      const id = m ? m.userData.id : null;
+      if (m) {
+        const u = m.userData;
         tooltip.style.display = 'block';
         tooltip.style.left = Math.min(e.clientX + 14, window.innerWidth - 320) + 'px';
         tooltip.style.top = (e.clientY + 12) + 'px';
@@ -239,16 +600,10 @@
           });
         }
       } else {
-        dom.style.cursor = 'default';
         tooltip.style.display = 'none';
+        hoverId = null;
       }
-      hoverId = id;
     }
-    dom.addEventListener('click', e => {
-      if (movedPx > 6) return; // that was an orbit drag, not a click
-      const hit = pick(e);
-      if (hit && handlers.onOpen) handlers.onOpen(hit.object.userData.id);
-    });
 
     // ---- search dimming ----
     const isMatch = (m, q) => !q || m.userData.title.toLowerCase().includes(q) || m.userData.id.toLowerCase().includes(q);
@@ -274,11 +629,11 @@
       const q = searchQuery.toLowerCase();
       const ms = nodeObjs.filter(m => m.visible && isMatch(m, q));
       if (!ms.length) return;
-      const box = new THREE.Box3();
-      ms.forEach(m => box.expandByObject(m));
+      const box3 = new THREE.Box3();
+      ms.forEach(m => box3.expandByObject(m));
       const c = new THREE.Vector3();
-      box.getCenter(c);
-      const sph = box.getBoundingSphere(new THREE.Sphere());
+      box3.getCenter(c);
+      const sph = box3.getBoundingSphere(new THREE.Sphere());
       const dist = Math.max(10, Math.min(220,
         (sph.radius / Math.sin((camera.fov * Math.PI / 180) / 2)) * 1.25));
       flyTo(c, dist);
@@ -310,6 +665,23 @@
     }
 
     applyFilters(); applySearch();
+    repaintAll();
+
+    // panel buttons
+    document.getElementById('sel-open').addEventListener('click', () => {
+      const sel = selectedMeshes();
+      if (sel.length && handlers.onOpen) handlers.onOpen(sel[0].userData.id);
+    });
+    selPinBtn.addEventListener('click', () => {
+      const sel = selectedMeshes();
+      if (pinDirty) savePinState();
+      else if (sel.length && sel.every(m => m.userData.pinned)) unpinSelection();
+      else savePinState();
+    });
+    document.getElementById('sel-deselect').addEventListener('click', deselectAll);
+    document.getElementById('sel-delete').addEventListener('click', deleteSelection);
+    document.getElementById('xf-done').addEventListener('click', commitTransform);
+    document.getElementById('xf-cancel').addEventListener('click', cancelTransform);
 
     // resize + render loop
     (function frame() {
@@ -339,6 +711,46 @@
       frameMatches,
       setFilters,
       applyScale(s) { for (const m of nodeObjs) m.scale.setScalar(s); },
+      handleKey,
+      getSelected() { return selectedMeshes().map(m => m.userData.id); },
+      pinAt(id) {
+        const m = byMesh.get(id);
+        if (!m) return;
+        m.userData.pinned = true;
+        if (handlers.onSaveLayout) handlers.onSaveLayout({ nodes: { [id]: { x: m.position.x, y: m.position.y, z: m.position.z } } });
+        repaintAll();
+      },
+      unpinAt(id) {
+        const m = byMesh.get(id);
+        if (!m) return;
+        m.userData.pinned = false;
+        movedNodes.delete(id);
+        if (handlers.onUnpin) handlers.onUnpin([id]);
+        repaintAll(); updateSelPanel();
+      },
+      isPinned(id) { const m = byMesh.get(id); return m ? m.userData.pinned : null; },
+      nodePos(id) { const m = byMesh.get(id); return m ? { ...m.position } : null; },
+      isDirty() { return pinDirty; },
+      _test: {
+        setSelection(list) { setSelection(list.map(id => byMesh.get(id)).filter(Boolean)); },
+        beginNodeDragAt(id) {
+          const m = byMesh.get(id); if (!m) return false;
+          setSelection([m]);
+          const fake = { clientX: innerWidth / 2, clientY: innerHeight / 2, pointerId: 1 };
+          beginNodeDrag(fake, [m]);
+          return true;
+        },
+        dragBy(dxyz) {
+          if (mode !== 'node-drag') return false;
+          for (let i = 0; i < drag.objs.length; i++) drag.objs[i].position.copy(drag.had[i]).add(new THREE.Vector3(dxyz[0], dxyz[1], dxyz[2]));
+          updateEdgePositions(); markMoved();
+          endInteractions();
+          return true;
+        },
+        transformState() { return { mode: xf.mode, moved: xf.moved }; },
+        commitTransform, cancelTransform,
+        selectAll() { handleKey({ key: 'a', target: document.body, preventDefault() {} }); return selectedMeshes().length; },
+      },
       getView() { return { theta, phi, radius, target: { x: target.x, y: target.y, z: target.z } }; },
       resetView() { theta = 0.9; phi = 1.15; radius = 78; target.set(0, 0, 0); },
       debug: {
@@ -347,13 +759,7 @@
           const e = edgeObjs.find(o => (o.userData.a === a && o.userData.b === b) || (o.userData.a === b && o.userData.b === a));
           return e ? e.visible : null;
         },
-        project(id) {
-          const m = nodeObjs.find(o => o.userData.id === id);
-          if (!m) return null;
-          const v = m.position.clone().project(camera);
-          const r = dom.getBoundingClientRect();
-          return { x: (v.x * 0.5 + 0.5) * r.width + r.left, y: (-v.y * 0.5 + 0.5) * r.height + r.top, visible: v.z < 1 };
-        },
+        project(id) { const p = byMesh.get(id) ? screenPos(byMesh.get(id)) : null; return p ? { ...p, visible: p.z < 1 } : null; },
       },
     };
   }

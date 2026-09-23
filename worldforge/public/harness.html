@@ -58,6 +58,24 @@
         </div>
         <div class="gs-hint">Sliders re-layout · chips hide categories · orphans = unlinked notes</div>
       </div>
+      <div id="sel-panel" class="hidden" role="status">
+        <div id="sel-title"></div>
+        <div id="sel-meta" class="muted"></div>
+        <div class="sel-actions">
+          <button id="sel-open" class="hud-btn" title="Open the first selected note">Open</button>
+          <button id="sel-pin" class="hud-btn" title="Pin in place, release, or save moved positions">📌 Pin</button>
+          <button id="sel-deselect" class="hud-btn" title="Clear selection (Esc)">Deselect</button>
+          <button id="sel-delete" class="hud-btn danger" title="Delete selection (goes to .trash, recoverable)">Delete</button>
+        </div>
+      </div>
+      <div id="xform-modal" class="hidden">
+        <div id="xf-title"></div>
+        <div id="xf-hint" class="muted"></div>
+        <div class="sel-actions">
+          <button id="xf-cancel" class="hud-btn" title="Undo and close (Esc)">Cancel</button>
+          <button id="xf-done" class="hud-btn primary" title="Keep the new arrangement (click anywhere)">Done</button>
+        </div>
+      </div>
       <div id="scene"></div>
       <div id="tooltip"></div>
     </section>
@@ -228,6 +246,7 @@ function mtgMock() {
 // ---- window.wf mock backed by harness-data.json ----
 (async function () {
   const data = await fetch('harness-data.json').then(r => r.json());
+  window.__wfData = data; // debug handle for browser-driven verification
   window.wf = {
     status: async () => ({ loaded: true, root: data.root, notes: data.graph.nodes.length }),
     pickVault: async () => null,
@@ -249,6 +268,13 @@ function mtgMock() {
       return { ok: true, id: rel };
     },
     openPath: async () => {},
+    getLayout: async () => JSON.parse(localStorage.wfLayout || '{"version":1,"nodes":{}}'),
+    saveLayout: async (l) => { localStorage.wfLayout = JSON.stringify({ version: 1, nodes: l.nodes || {} }); return { ok: true }; },
+    unpinLayout: async (ids) => {
+      let l; try { l = JSON.parse(localStorage.wfLayout || '{"version":1,"nodes":{}}'); } catch { l = { version: 1, nodes: {} }; }
+      for (const id of ids || []) delete l.nodes[id];
+      localStorage.wfLayout = JSON.stringify(l); return { ok: true };
+    },
     // ---- maps + publish mocks (localStorage-backed) ----
     mapsList: async () => { let ms = []; try { ms = JSON.parse(localStorage.wfMaps || '[]'); } catch {} return { ok: true, data: ms }; },
     mapsSave: async (ms) => { localStorage.wfMaps = JSON.stringify(ms); return { ok: true, data: ms }; },
@@ -261,7 +287,7 @@ function mtgMock() {
     // ---- MTG mock: tiny inline index + localStorage collection ----
     ...(mtgMock()),
   };
-  const V = 'maps2';
+  const V = 'world1';
   const s = document.createElement('script');
   s.src = 'vendor/three.min.js';
   s.onload = () => {

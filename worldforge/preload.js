@@ -20,6 +20,10 @@ contextBridge.exposeInMainWorld('wf', {
   deleteNote: (id) => ipcRenderer.invoke('wf:delete-note', id),
   deleteNotes: (ids) => ipcRenderer.invoke('wf:delete-notes', ids),
   openPath: (dir) => ipcRenderer.invoke('wf:open-path', dir),
+  // world layout (pinned node positions)
+  getLayout: () => ipcRenderer.invoke('wf:get-layout'),
+  saveLayout: (l) => ipcRenderer.invoke('wf:save-layout', l),
+  unpinLayout: (ids) => ipcRenderer.invoke('wf:unpin-layout', ids),
   // MTG
   mtgSearch: (q) => ipcRenderer.invoke('mtg:search', q),
   mtgCard: (name) => ipcRenderer.invoke('mtg:card', name),
