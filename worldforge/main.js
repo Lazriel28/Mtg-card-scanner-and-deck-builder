@@ -162,6 +162,7 @@ ipcMain.handle('wf:create-note', (e, title, folder, type) => {
   fs.mkdirSync(path.dirname(full), { recursive: true });
   const fm = type ? `---\ntype: ${type}\ntags: []\n---\n\n` : '';
   fs.writeFileSync(full, `${fm}# ${safe}\n\n`, 'utf8');
+  tombstones.clear(vault.root, [rel]); // recreated path: any old tombstone is stale
   vault = scanVault(vault.root);
   return { ok: true, id: rel };
 });
