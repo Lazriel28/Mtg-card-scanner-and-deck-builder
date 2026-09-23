@@ -48,6 +48,21 @@ function pruneBackups(dir, keep = 50) {
   } catch {}
 }
 
+// Move a note's file to the vault's .trash (with backup first). Recoverable.
+function trashNote(vaultRoot, n) {
+  backupNote(vaultRoot, n.id);
+  const trashDir = path.join(vaultRoot, '.trash');
+  fs.mkdirSync(trashDir, { recursive: true });
+  let dest = path.join(trashDir, path.basename(n.file));
+  let k = 1;
+  while (fs.existsSync(dest)) {
+    const ext = path.extname(n.file);
+    dest = path.join(trashDir, path.basename(n.file, ext) + ' ' + (k++) + ext);
+  }
+  fs.renameSync(n.file, dest);
+  return dest;
+}
+
 function doLoadVault(rootPath) {
   if (!rootPath || !fs.existsSync(rootPath)) throw new Error('folder not found: ' + rootPath);
   vault = scanVault(rootPath);
@@ -185,18 +200,22 @@ ipcMain.handle('wf:delete-note', (e, id) => {
   if (!vault) throw new Error('no vault loaded');
   const n = vault.notesById.get(id);
   if (!n) throw new Error('note not found');
-  backupNote(vault.root, id); // backup copy, then move to .trash (recoverable)
-  const trashDir = path.join(vault.root, '.trash');
-  fs.mkdirSync(trashDir, { recursive: true });
-  let dest = path.join(trashDir, path.basename(n.file));
-  let k = 1;
-  while (fs.existsSync(dest)) {
-    const ext = path.extname(n.file);
-    dest = path.join(trashDir, path.basename(n.file, ext) + ' ' + (k++) + ext);
-  }
-  fs.renameSync(n.file, dest);
+  const movedTo = trashNote(vault.root, n);
   vault = scanVault(vault.root);
-  return { ok: true, movedTo: dest };
+  return { ok: true, movedTo };
+});
+
+// Batch delete: trash every id that still exists; rescan once at the end.
+ipcMain.handle('wf:delete-notes', (e, ids) => {
+  if (!vault) throw new Error('no vault loaded');
+  const moved = [], missing = [];
+  for (const id of (Array.isArray(ids) ? ids : [])) {
+    const n = vault.notesById.get(id);
+    if (!n) { missing.push(id); continue; }
+    try { trashNote(vault.root, n); moved.push(id); } catch { missing.push(id); }
+  }
+  if (moved.length) vault = scanVault(vault.root);
+  return { ok: true, deleted: moved.length, missing };
 });
 
 ipcMain.handle('wf:open-path', (e, dir) => {

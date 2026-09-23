@@ -1,7 +1,8 @@
 'use strict';
 // WorldForge importer: copies .md notes from any source folder into the
-// working vault (usually an <imports/> subfolder). Never overwrites - on
-// name collisions the incoming file gets a numbered suffix.
+// working vault (usually an <imports/> subfolder). Duplicate-safe: a file
+// that already exists at the destination is skipped, so re-importing the
+// same folder restores only notes you deleted in between. Never overwrites.
 
 const fs = require('fs');
 const path = require('path');
@@ -39,14 +40,9 @@ function importNotes(srcRoot, vaultRoot, destFolder) {
   let imported = 0, renamed = 0, skipped = 0;
   for (const f of files) {
     const relPath = path.relative(srcRoot, f);
-    let dest = path.join(destRoot, relPath);
+    const dest = path.join(destRoot, relPath);
     try { fs.mkdirSync(path.dirname(dest), { recursive: true }); } catch { skipped++; continue; }
-    let n = 2;
-    while (fs.existsSync(dest)) {
-      const ext = path.extname(dest);
-      dest = path.join(path.dirname(dest), path.basename(dest, ext) + ' ' + (n++) + ext);
-      renamed++;
-    }
+    if (fs.existsSync(dest)) { skipped++; continue; } // already imported
     try { fs.copyFileSync(f, dest); imported++; } catch { skipped++; }
   }
   return { imported, renamed, skipped, dest: destRoot, total: files.length };

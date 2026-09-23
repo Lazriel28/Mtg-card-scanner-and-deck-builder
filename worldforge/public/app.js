@@ -647,6 +647,61 @@
     return { init };
   })();
 
+  // ---------- mass delete ----------
+  let mdSelected = new Set();
+  function mdPaintCount() {
+    const el = $('md-count');
+    if (el) el.textContent = mdSelected.size + ' selected';
+    const btn = $('md-delete');
+    if (btn) btn.disabled = mdSelected.size === 0;
+  }
+  function mdRow(n) {
+    const checked = mdSelected.has(n.id);
+    return `<label class="md-item"><input type="checkbox" data-md="${esc(n.id)}" ${checked ? 'checked' : ''} aria-label="Select ${esc(n.title)} for deletion">
+      <span>${esc(n.title)}</span><span class="spacer"></span><span class="dir">${esc(n.dir || '.')}</span></label>`;
+  }
+  function mdPaintList() {
+    const q = ($('md-filter') && $('md-filter').value || '').trim().toLowerCase();
+    const list = (graph ? graph.nodes : []).filter(n => !q || n.title.toLowerCase().includes(q));
+    $('md-list').innerHTML = list.map(mdRow).join('') || '<div class="md-item muted">no notes match</div>';
+    mdPaintCount();
+  }
+  function openMassDelete() {
+    mdSelected = new Set();
+    if ($('md-filter')) $('md-filter').value = '';
+    mdPaintList();
+    $('mass-delete-overlay').classList.remove('hidden');
+    if ($('md-filter')) $('md-filter').focus();
+  }
+  on('btn-mass-delete', 'click', openMassDelete);
+  on('md-close', 'click', () => $('mass-delete-overlay').classList.add('hidden'));
+  on('md-filter', 'input', mdPaintList);
+  on('md-list', 'change', e => {
+    const id = e.target.dataset && e.target.dataset.md;
+    if (!id) return;
+    if (e.target.checked) mdSelected.add(id); else mdSelected.delete(id);
+    mdPaintCount();
+  });
+  on('md-dupes', 'click', () => {
+    const byTitle = {};
+    for (const n of (graph ? graph.nodes : [])) (byTitle[n.title] = byTitle[n.title] || []).push(n);
+    mdSelected = new Set();
+    for (const list of Object.values(byTitle)) if (list.length > 1) list.forEach(n => mdSelected.add(n.id));
+    mdPaintList();
+  });
+  on('md-delete', 'click', async () => {
+    if (!mdSelected.size) return;
+    const ids = [...mdSelected];
+    if (!confirm(`Delete ${ids.length} note${ids.length === 1 ? '' : 's'}? They move to .trash and are recoverable.`)) return;
+    try {
+      const res = await window.wf.deleteNotes(ids);
+      mdSelected = new Set();
+      $('mass-delete-overlay').classList.add('hidden');
+      await refreshGraph();
+      alert(`Deleted ${res.deleted} note${res.deleted === 1 ? '' : 's'} — in .trash, recoverable.`);
+    } catch (err) { alert('Mass delete failed: ' + (err.message || err)); }
+  });
+
   // ---------- vault picker ----------
   on('btn-vault', 'click', async () => {
     const dir = await window.wf.pickVault();

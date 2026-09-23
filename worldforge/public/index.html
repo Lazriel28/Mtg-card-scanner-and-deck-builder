@@ -26,6 +26,7 @@
         <input id="search" placeholder="Search notes…" aria-label="Search notes" autocomplete="off">
         <button id="btn-new" class="hud-btn" title="Create a new note">＋ Note</button>
         <button id="btn-import" class="hud-btn" title="Import .md notes from another folder">📥 Import</button>
+        <button id="btn-mass-delete" class="hud-btn" title="Delete many notes at once (goes to .trash, recoverable)">🗑 Mass delete</button>
         <button id="btn-graph-settings" class="hud-btn" title="Graph settings: size, distance, filters">⚙</button>
         <span id="vault-label" class="muted"></span>
       </div>
@@ -142,6 +143,24 @@
     </div>
     <div id="np-links"></div>
   </aside>
+</div>
+<div id="mass-delete-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="md-title">
+  <div class="md-box">
+    <div class="md-head">
+      <h2 id="md-title">🗑 Mass delete</h2>
+      <button id="md-close" aria-label="Close mass delete">✕</button>
+    </div>
+    <div class="md-toolbar">
+      <input id="md-filter" placeholder="Filter notes…" aria-label="Filter notes by title" autocomplete="off">
+      <button id="md-dupes" title="Select every note whose title appears more than once (e.g. Note 2 from re-imports)">Select duplicates</button>
+      <span id="md-count" class="muted" aria-live="polite">0 selected</span>
+    </div>
+    <div id="md-list" class="md-list" role="list"></div>
+    <div class="md-foot">
+      <span class="muted">Deleted notes go to your vault's <code>.trash/</code> — recoverable.</span>
+      <button id="md-delete" class="danger" disabled>Delete selected</button>
+    </div>
+  </div>
 </div>
 <div id="manual-overlay" class="hidden"><iframe id="manual-frame" src="about:blank"></iframe><button id="manual-close" title="Close (Esc)">✕</button></div>
 <script src="vendor/three.min.js"></script>

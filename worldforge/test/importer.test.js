@@ -8,7 +8,7 @@ const { importNotes, collectFiles } = require('../src/importer');
 
 function tmp() { return fs.mkdtempSync(path.join(os.tmpdir(), 'wf-import-')); }
 
-test('importer copies .md trees, skips hidden/config dirs, renames collisions', () => {
+test('importer copies .md trees, skips hidden/config dirs, never overwrites', () => {
   const src = tmp(), vault = tmp();
   fs.writeFileSync(path.join(src, 'Note A.md'), '# A');
   fs.mkdirSync(path.join(src, 'sub'));
@@ -24,12 +24,30 @@ test('importer copies .md trees, skips hidden/config dirs, renames collisions', 
   assert.ok(!fs.existsSync(path.join(vault, 'imports', 'ignore.txt')));
   assert.ok(!fs.existsSync(path.join(vault, 'imports', '.obsidian')));
 
-  // collision: re-import same source -> numbered copies, never overwrite
+  // duplicate protection: re-import same source -> everything skipped
   const r2 = importNotes(src, vault, 'imports');
-  assert.strictEqual(r2.imported, 2);
-  assert.ok(r2.renamed >= 2, 'collisions should be renamed, got ' + r2.renamed);
-  assert.ok(fs.existsSync(path.join(vault, 'imports', 'Note A 2.md')));
-  // original untouched
+  assert.strictEqual(r2.imported, 0);
+  assert.strictEqual(r2.skipped, 2);
+  assert.strictEqual(r2.renamed, 0);
+  // originals untouched
+  assert.strictEqual(fs.readFileSync(path.join(vault, 'imports', 'Note A.md'), 'utf8'), '# A');
+  assert.strictEqual(fs.readFileSync(path.join(vault, 'imports', 'sub', 'Note B.md'), 'utf8'), '# B');
+});
+
+test('re-import restores only notes deleted since the last import', () => {
+  const src = tmp(), vault = tmp();
+  fs.writeFileSync(path.join(src, 'Note A.md'), '# A');
+  fs.writeFileSync(path.join(src, 'Note B.md'), '# B');
+  fs.writeFileSync(path.join(src, 'Note C.md'), '# C');
+  assert.strictEqual(importNotes(src, vault, 'imports').imported, 3);
+
+  // user deletes one note in the vault
+  fs.rmSync(path.join(vault, 'imports', 'Note B.md'));
+
+  const r2 = importNotes(src, vault, 'imports');
+  assert.strictEqual(r2.imported, 1);            // only the missing one
+  assert.strictEqual(r2.skipped, 2);             // the rest untouched
+  assert.ok(fs.existsSync(path.join(vault, 'imports', 'Note B.md')), 'deleted note restored');
   assert.strictEqual(fs.readFileSync(path.join(vault, 'imports', 'Note A.md'), 'utf8'), '# A');
 });
 

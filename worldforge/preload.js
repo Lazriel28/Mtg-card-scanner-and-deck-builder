@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('wf', {
   setType: (id, type) => ipcRenderer.invoke('wf:set-type', id, type),
   copyText: (text) => ipcRenderer.invoke('wf:copy-text', text),
   deleteNote: (id) => ipcRenderer.invoke('wf:delete-note', id),
+  deleteNotes: (ids) => ipcRenderer.invoke('wf:delete-notes', ids),
   openPath: (dir) => ipcRenderer.invoke('wf:open-path', dir),
   // MTG
   mtgSearch: (q) => ipcRenderer.invoke('mtg:search', q),

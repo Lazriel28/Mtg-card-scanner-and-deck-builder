@@ -23,6 +23,7 @@
         <input id="search" placeholder="Search notes…" aria-label="Search notes" autocomplete="off">
         <button id="btn-new" class="hud-btn">＋ Note</button>
         <button id="btn-import" class="hud-btn">📥 Import</button>
+        <button id="btn-mass-delete" class="hud-btn" title="Delete many notes at once (goes to .trash, recoverable)">🗑 Mass delete</button>
         <button id="btn-graph-settings" class="hud-btn" title="Graph settings">⚙</button>
         <span id="vault-label" class="muted"></span>
       </div>
@@ -129,6 +130,24 @@
     <div id="np-links"></div>
   </aside>
 </div>
+<div id="mass-delete-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="md-title">
+  <div class="md-box">
+    <div class="md-head">
+      <h2 id="md-title">🗑 Mass delete</h2>
+      <button id="md-close" aria-label="Close mass delete">✕</button>
+    </div>
+    <div class="md-toolbar">
+      <input id="md-filter" placeholder="Filter notes…" aria-label="Filter notes by title" autocomplete="off">
+      <button id="md-dupes" title="Select every note whose title appears more than once (e.g. Note 2 from re-imports)">Select duplicates</button>
+      <span id="md-count" class="muted" aria-live="polite">0 selected</span>
+    </div>
+    <div id="md-list" class="md-list" role="list"></div>
+    <div class="md-foot">
+      <span class="muted">Deleted notes go to your vault's <code>.trash/</code> — recoverable.</span>
+      <button id="md-delete" class="danger" disabled>Delete selected</button>
+    </div>
+  </div>
+</div>
 <div id="manual-overlay" class="hidden"><iframe id="manual-frame" src="about:blank"></iframe><button id="manual-close" title="Close (Esc)">✕</button></div>
 <script src="vendor/three.min.js"></script>
 <script>
@@ -186,6 +205,7 @@ function mtgMock() {
     noteTitles: async () => Object.keys(data.notes).map(id => ({ id, title: data.notes[id].title })),
     setType: async (id, type) => { if (data.notes[id]) data.notes[id].type = (type || 'untyped').toLowerCase(); const nd = data.graph.nodes.find(n => n.id === id); if (nd) nd.type = (type || 'untyped').toLowerCase(); return { ok: true }; },
     copyText: async t => { window.__lastCopy = t; return { ok: true }; },
+    deleteNotes: async ids => { let n = 0; for (const id of ids) { if (data.notes[id]) { delete data.notes[id]; n++; } } data.graph.nodes = data.graph.nodes.filter(x => !ids.includes(x.id)); return { ok: true, deleted: n, missing: [] }; },
     deleteNote: async id => { delete data.notes[id]; data.graph.nodes = data.graph.nodes.filter(n => n.id !== id); return { ok: true }; },
     createNote: async (title, folder, type) => {
       const rel = (folder ? folder + '/' : '') + title + '.md';
@@ -197,7 +217,7 @@ function mtgMock() {
     // ---- MTG mock: tiny inline index + localStorage collection ----
     ...(mtgMock()),
   };
-  const V = 'a11y1';
+  const V = 'md2';
   const s = document.createElement('script');
   s.src = 'vendor/three.min.js';
   s.onload = () => {

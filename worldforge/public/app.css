@@ -122,6 +122,25 @@ button, [role="button"], input, select, textarea { min-height: 24px; }
   }
 }
 
+/* mass delete modal */
+#mass-delete-overlay { position:fixed; inset:0; z-index:70; background:#000a; display:flex; align-items:center; justify-content:center; padding:24px; }
+.md-box { width:min(640px, 94vw); max-height:84vh; display:flex; flex-direction:column; background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:14px; gap:10px; }
+.md-head { display:flex; justify-content:space-between; align-items:center; }
+.md-head h2 { margin:0; font-size:16px; }
+.md-toolbar { display:flex; gap:8px; align-items:center; }
+.md-toolbar input { flex:1; }
+.md-toolbar button { background:#21262d; color:var(--text); border:1px solid var(--border); border-radius:7px; padding:5px 10px; cursor:pointer; }
+.md-list { flex:1; overflow:auto; border:1px solid var(--border); border-radius:8px; min-height:120px; }
+.md-item { display:flex; gap:8px; align-items:center; padding:4px 10px; border-bottom:1px solid var(--border); font-size:12.5px; }
+.md-item:hover { background:#161b22; }
+.md-item .dir { color:#8b949e; font-size:11px; }
+.md-item .spacer { flex:1; }
+.md-foot { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.md-foot code { color:#8b949e; }
+#md-delete.danger { background:#b62324; border-color:#da3633; color:#fff; border-radius:8px; padding:6px 14px; cursor:pointer; }
+#md-delete.danger:disabled { opacity:0.45; cursor:not-allowed; }
+#md-delete.danger:not(:disabled):hover { background:#da3633; }
+
 /* vault label */
 #vault-label { font-size:12px; max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
