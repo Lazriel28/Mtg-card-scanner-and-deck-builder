@@ -141,6 +141,29 @@ button, [role="button"], input, select, textarea { min-height: 24px; }
 #md-delete.danger:disabled { opacity:0.45; cursor:not-allowed; }
 #md-delete.danger:not(:disabled):hover { background:#da3633; }
 
+/* maps view */
+.maps-wrap { display:flex; flex-direction:column; height:100%; padding:12px 18px; gap:10px; }
+.maps-bar { display:flex; gap:8px; align-items:center; }
+.maps-bar button, .maps-bar select { background:#21262d; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px; }
+#map-delete { min-width:34px; }
+.map-stage { flex:1; min-height:0; position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#0a0d12; }
+#map-stage img.map-img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; user-select:none; }
+.map-pin { position:absolute; width:16px; height:16px; margin:-14px 0 0 -8px; border-radius:50% 50% 50% 0; background:#f85149; border:2px solid #fff; transform:rotate(-45deg); cursor:pointer; z-index:5; }
+.map-pin:hover, .map-pin.sel { background:#58a6ff; }
+.map-pin .lbl { position:absolute; left:14px; top:-4px; transform:rotate(45deg); white-space:nowrap; background:#161b22ee; color:var(--text); font-size:11px; padding:1px 6px; border-radius:5px; border:1px solid var(--border); pointer-events:none; }
+#map-pin-ac { position:absolute; z-index:10; background:#161b22; border:1px solid var(--border); border-radius:8px; padding:6px; width:240px; box-shadow:0 8px 20px #000a; }
+#map-pin-ac input { width:100%; box-sizing:border-box; }
+#map-pin-ac .mtg-ac { position:static; max-height:160px; border:none; box-shadow:none; margin-top:4px; }
+
+/* publish view */
+.pub-wrap { max-width:720px; padding:28px 36px; }
+.pub-wrap h2 { margin-top:0; }
+#pub-export { background:#238636; color:#fff; border:1px solid #2ea043; border-radius:8px; padding:8px 18px; cursor:pointer; font-size:14px; }
+#pub-export:disabled { opacity:.5; cursor:wait; }
+.pub-what { display:flex; gap:36px; margin-top:22px; }
+.pub-what ul { margin:6px 0 0; padding-left:18px; }
+.pub-what li { margin:4px 0; font-size:13px; }
+
 /* vault label */
 #vault-label { font-size:12px; max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 

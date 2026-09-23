@@ -28,4 +28,13 @@ contextBridge.exposeInMainWorld('wf', {
   mtgCollectionSet: (name, qty) => ipcRenderer.invoke('mtg:collection-set', name, qty),
   mtgSuggestDeck: (opts) => ipcRenderer.invoke('mtg:suggest-deck', opts),
   mtgCounters: (names) => ipcRenderer.invoke('mtg:counters', names),
+  // Maps
+  mapsList: () => ipcRenderer.invoke('maps:list'),
+  mapsSave: (maps) => ipcRenderer.invoke('maps:save', maps),
+  mapsPickImage: () => ipcRenderer.invoke('maps:pick-image'),
+  mapsAddImage: (src, name) => ipcRenderer.invoke('maps:add-image', src, name),
+  mapsRemove: (id) => ipcRenderer.invoke('maps:remove', id),
+  // Publish
+  publishPickDir: () => ipcRenderer.invoke('publish:pick-dir'),
+  publishExport: (dir) => ipcRenderer.invoke('publish:export', dir),
 });

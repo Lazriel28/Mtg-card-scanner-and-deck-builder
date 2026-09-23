@@ -1,6 +1,6 @@
 # WorldForge — Field Manual
 
-*Version 2.1 · September 23, 2026 · updated with every new feature*
+*Version 2.2 · September 23, 2026 · updated with every new feature*
 
 WorldForge is your offline worldbuilding studio. It reads your Obsidian vault
 directly from disk — nothing is copied, nothing is uploaded, and Obsidian keeps
@@ -164,7 +164,20 @@ you'd duplicate everything.
 
 ---
 
-## 7. Mass delete (🗑)
+## 7. Maps (🗺️)
+
+Pin your notes onto real images — hand-drawn maps, photos, floor plans.
+
+- **🗺 Add map image** — pick any image; it's **copied into your vault**
+  (`.worldforge/maps/`), so maps travel with the vault, like everything else.
+- **Click anywhere on the map** → type a note's name (with live suggestions)
+  → a pin appears, labeled with the note's title.
+- **Click a pin** → the note opens right in the panel. **Right-click a pin**
+  → remove it.
+- Pins store their position as a fraction of the image, so they stay put at
+  any window size. Remove a whole map with the 🗑 button next to the picker.
+
+## 8. Mass delete (🗑)
 
 Next to 📥 Import is **🗑 Mass delete** — for cleaning up in bulk:
 
@@ -179,7 +192,7 @@ The graph and the list refresh immediately after.
 
 ---
 
-## 8. The MTG workshop (🃏)
+## 9. The MTG workshop (🃏)
 
 A tab in the left rail — your Magic: The Gathering cards, offline, next to
 your world.
@@ -209,7 +222,7 @@ drop cards (with the same type-as-you-type suggestions), tap them, stack
 
 ---
 
-## 9. Starting the app
+## 10. Starting the app
 
 - **`Start WorldForge.bat`** — opens the app; the black cmd window closes by
   itself (nothing to close manually).
@@ -227,7 +240,7 @@ original returns. Tombstones older than 7 days are never resurrected.
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 | Symptom | Fix |
 |---|---|
@@ -241,24 +254,32 @@ original returns. Tombstones older than 7 days are never resurrected.
 
 ---
 
-## 11. On the roadmap
+## 12. Publish (📖)
 
-Greyed-out rail buttons are promised, not dead:
+One click builds a **complete static wiki website** from your vault into a
+folder of your choosing (`wiki-site-<date>`):
+
+- One page per note with all `[[wikilinks]]` resolved, plus tags, backlinks,
+  and outgoing links on every page.
+- Tag pages + a tag cloud, and a client-side note filter in the sidebar.
+- **graph.html** — an interactive, rotatable/zoomable 3D graph of the whole
+  vault, clickable through to every page.
+
+**Host it free:** drag the folder onto **app.netlify.com/drop** (instant
+public URL, no account needed for a peek), or push it to GitHub Pages /
+Cloudflare Pages. Or just double-click `index.html` — it works offline.
+
+## 13. On the roadmap
 
 1. **M2 — Cards 🗂️** a gallery of your Characters / Locations / Items / Lore
    with one-click type setting.
-2. **M3 — Maps 🗺️** drop pins on your hand-drawn or photo maps; pins link to
-   notes; stored in the vault so they travel with it.
-3. **M4 — Publish 📖** one-click export of a real wiki website (notes, tags,
-   3D graph as a web page) — hostable free on GitHub Pages / Netlify /
-   Cloudflare Pages. The free answer to paid wiki hosting.
-4. **M5 — Book studio** arrange notes into chapters; export a typeset book:
+2. **M5 — Book studio** arrange notes into chapters; export a typeset book:
    HTML, print-ready PDF, and **EPUB** for Kindle / Apple Books.
-5. **M6 — Cinema 🎬** your book as a 3D cutscene: camera flies through the
+3. **M6 — Cinema 🎬** your book as a 3D cutscene: camera flies through the
    world, chapter text plays as subtitles — with pause, speed, fast-forward,
    scrub, and free camera control. Plus **Sim-to-Scene**: pose objects in the
    3D scene and the app writes the prose for you.
-6. **Blender-style spatial editing** drag, move, rotate, and box-select nodes
+4. **Blender-style spatial editing** drag, move, rotate, and box-select nodes
    directly in 3D (G/R/S keybinds, Blender style) with hand-placed layouts
    that persist — the engine for this is already built.
 

@@ -11,6 +11,8 @@ const { importNotes } = require('./src/importer');
 const { setTypeInRaw } = require('./src/types');
 const mtg = require('./src/mtg');
 const tombstones = require('./src/tombstones');
+const mapsStore = require('./src/maps');
+const { exportSite } = require('./src/export');
 
 const DATA_DIR = path.join(__dirname, 'data');
 mtg.setDataDir(DATA_DIR); // MTG card index + collection live alongside vault config
@@ -233,6 +235,50 @@ const wrap = fn => async (e, ...args) => {
   try { return { ok: true, data: await fn(...args) }; }
   catch (err) { return { ok: false, error: String(err.message || err) }; }
 };
+
+// ---------- Maps ----------
+ipcMain.handle('maps:list', wrap(() => {
+  if (!vault) throw new Error('no vault loaded');
+  return mapsStore.load(vault.root);
+}));
+ipcMain.handle('maps:save', wrap((maps) => {
+  if (!vault) throw new Error('no vault loaded');
+  return mapsStore.save(vault.root, Array.isArray(maps) ? maps : []);
+}));
+ipcMain.handle('maps:pick-image', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Choose a map image (png, jpg, gif, webp, svg)',
+    properties: ['openDirectory' === 'x' ? undefined : 'openFile'],
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'] }],
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+ipcMain.handle('maps:add-image', wrap((srcPath, name) => {
+  if (!vault) throw new Error('no vault loaded');
+  return mapsStore.addImage(vault.root, srcPath, name);
+}));
+ipcMain.handle('maps:remove', wrap((mapId) => {
+  if (!vault) throw new Error('no vault loaded');
+  return mapsStore.removeMap(vault.root, mapId);
+}));
+
+// ---------- Publish (export static wiki) ----------
+ipcMain.handle('publish:pick-dir', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Choose where to build the wiki site (a new subfolder is created)',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+ipcMain.handle('publish:export', wrap(async (outBase) => {
+  if (!vault) throw new Error('no vault loaded');
+  if (!outBase || !fs.existsSync(outBase)) throw new Error('output folder not found');
+  const stamp = new Date().toISOString().slice(0, 10);
+  const outDir = path.join(outBase, 'wiki-site-' + stamp);
+  const r = exportSite(vault, outDir);
+  shell.openPath(outDir);
+  return r;
+}));
 
 ipcMain.handle('mtg:search', wrap(q => mtg.search(q, 12)));
 ipcMain.handle('mtg:card', wrap(name => mtg.cardView(mtg.get(name))));

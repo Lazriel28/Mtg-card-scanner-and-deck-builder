@@ -390,7 +390,157 @@
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       $('view-' + btn.dataset.view).classList.add('active');
       if (btn.dataset.view === 'cards') Mtg.init(); // lazy-load the workshop
+      if (btn.dataset.view === 'maps') MapsView.init();
     });
+  });
+
+  // ---------- maps view ----------
+  const MapsView = (function () {
+    let ready = false, maps = [], current = null, placing = false;
+    const wf = () => window.wf;
+    const esc2 = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    async function init() {
+      if (ready) return; ready = true;
+      on('map-add', 'click', addMap);
+      on('map-delete', 'click', removeCurrent);
+      on('map-select', 'change', e => { current = maps.find(m => m.id === e.target.value) || null; paint(); });
+      await reload();
+      current = maps[0] || null;
+      paint();
+    }
+
+    async function addMap() {
+      try {
+        const src = await wf().mapsPickImage();
+        if (!src) return;
+        const m = await wf().mapsAddImage(src);
+        await reload();
+        current = maps.find(x => x.id === m.id) || maps[maps.length - 1];
+        paint();
+      } catch (err) { alert('Could not add map: ' + (err.message || err)); }
+    }
+
+    async function removeCurrent() {
+      if (!current) return;
+      if (!confirm(`Remove map "${current.name}" and its pins? (The original image stays wherever you got it from.)`)) return;
+      await wf().mapsRemove(current.id);
+      await reload();
+      current = maps[0] || null;
+      paint();
+    }
+
+    async function reload() {
+      const res = await wf().mapsList();
+      maps = res && res.ok ? res.data : [];
+    }
+
+    function paint() {
+      const sel = $('map-select');
+      sel.innerHTML = maps.map(m => `<option value="${esc2(m.id)}" ${current && current.id === m.id ? 'selected' : ''}>${esc2(m.name)}</option>`).join('');
+      if (current && !sel.value && maps.length) { sel.value = current.id; }
+      const stage = $('map-stage');
+      $('map-delete').disabled = !current;
+      if (!current) { stage.innerHTML = '<p class="muted pad" id="map-empty">No maps yet — click <b>🗺 Add map image</b> to bring in a hand-drawn map, photo, or floor plan. Then click the image to pin a note there.</p>'; $('map-hint').textContent = ''; return; }
+      $('map-hint').textContent = placing ? 'Click on the map to place the pin…' : 'Click the map to pin a note · click a pin to open the note · right-click a pin to remove it';
+      stage.innerHTML = `<img class="map-img" src="vault-asset:///${String(current.file).replace(/\\/g, '/')}" alt="${esc2(current.name)}">`;
+      for (const p of (current.pins || [])) stage.appendChild(pinEl(p));
+      stage.onclick = onStageClick;
+      stage.oncontextmenu = e => {
+        const pinElm = e.target.closest('.map-pin');
+        if (!pinElm) return;
+        e.preventDefault();
+        const p = current.pins[+pinElm.dataset.i];
+        current.pins.splice(+pinElm.dataset.i, 1);
+        savePins(); paint();
+      };
+    }
+
+    function pinEl(p, i) {
+      const d = document.createElement('div');
+      d.className = 'map-pin'; d.dataset.i = i;
+      d.style.left = (p.x * 100) + '%'; d.style.top = (p.y * 100) + '%';
+      d.title = p.label || p.noteId || 'pin';
+      d.innerHTML = `<span class="lbl">${esc2(p.label || '')}</span>`;
+      d.onclick = e => { e.stopPropagation(); openNote(p.noteId); };
+      return d;
+    }
+
+    function onStageClick(e) {
+      if (!current) return;
+      if (e.target.closest('.map-pin')) return;
+      const stage = $('map-stage');
+      const rect = stage.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width, y = (e.clientY - rect.top) / rect.height;
+      askNoteForPin(x, y, e);
+    }
+
+    function askNoteForPin(x, y, ev) {
+      // small popup with a note-title autocomplete (reuses wf.noteTitles)
+      const stage = $('map-stage');
+      const old = document.getElementById('map-pin-ac');
+      if (old) old.remove();
+      const box = document.createElement('div');
+      box.id = 'map-pin-ac';
+      box.innerHTML = `<input placeholder="Which note lives here? (Enter to pin)"><div class="mtg-ac hidden"></div>`;
+      stage.appendChild(box);
+      const rect = stage.getBoundingClientRect();
+      box.style.left = Math.min(x * rect.width + 12, rect.width - 250) + 'px';
+      box.style.top = Math.min(y * rect.height + 12, rect.height - 90) + 'px';
+      const input = box.querySelector('input');
+      const popup = box.querySelector('.mtg-ac');
+      input.focus();
+      let titles = [];
+      wf().noteTitles().then(t => { titles = t; });
+      input.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        const hits = q ? titles.filter(t => t.title.toLowerCase().includes(q)).slice(0, 8) : titles.slice(0, 8);
+        popup.innerHTML = hits.map((t, i) => `<div class="mtg-ac-item" data-id="${esc2(t.id)}"><span>${esc2(t.title)}</span></div>`).join('');
+        popup.classList.toggle('hidden', !hits.length);
+      });
+      const commit = (noteId) => {
+        if (!noteId) { box.remove(); return; }
+        const t = titles.find(t => t.id === noteId);
+        current.pins.push({ x, y, noteId, label: t ? t.title : noteId });
+        savePins();
+        box.remove(); paint();
+      };
+      popup.addEventListener('mousedown', e => {
+        const item = e.target.closest('.mtg-ac-item');
+        if (item) { commit(item.dataset.id); }
+      });
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          const first = popup.querySelector('.mtg-ac-item');
+          commit(first ? first.dataset.id : null);
+        } else if (e.key === 'Escape') { box.remove(); }
+      });
+      setTimeout(() => {
+        document.addEventListener('click', function away(ev) {
+          if (!box.contains(ev.target)) { box.remove(); document.removeEventListener('click', away); }
+        });
+      }, 0);
+    }
+
+    async function savePins() {
+      const res = await wf().mapsSave(maps);
+      if (res && !res.ok) alert('Could not save pins: ' + res.error);
+    }
+
+    return { init };
+  })();
+
+  // ---------- publish view ----------
+  on('pub-export', 'click', async () => {
+    const btn = $('pub-export'), status = $('pub-status');
+    try {
+      const dir = await window.wf.publishPickDir();
+      if (!dir) return;
+      btn.disabled = true; status.textContent = 'Building…';
+      const res = await window.wf.publishExport(dir);
+      status.textContent = res.ok ? `Done — ${res.data.pages} pages in ${res.data.outDir}` : ('Failed: ' + res.error);
+    } catch (err) { status.textContent = 'Failed: ' + (err.message || err); }
+    btn.disabled = false;
   });
 
   // ---------- MTG workshop ----------
@@ -682,11 +832,24 @@
     mdPaintCount();
   });
   on('md-dupes', 'click', () => {
-    const byTitle = {};
-    for (const n of (graph ? graph.nodes : [])) (byTitle[n.title] = byTitle[n.title] || []).push(n);
+    // Old importer renamed collisions to "Note 2", "Note 2 3" — strip those
+    // trailing number suffixes before grouping, so "Koda" and "Koda 2" group
+    // together. Within each family, the LARGEST note (the real content) is
+    // kept and the rest are selected for deletion — empty "Koda 2" clones
+    // never outrank the original.
+    const baseOf = t => String(t).replace(/( \d+)+$/, '').trim().toLowerCase();
+    const groups = {};
+    for (const n of (graph ? graph.nodes : [])) (groups[baseOf(n.title)] = groups[baseOf(n.title)] || []).push(n);
     mdSelected = new Set();
-    for (const list of Object.values(byTitle)) if (list.length > 1) list.forEach(n => mdSelected.add(n.id));
+    let families = 0;
+    for (const list of Object.values(groups)) {
+      if (list.length < 2) continue;
+      families++;
+      const keep = [...list].sort((a, b) => (b.size || 0) - (a.size || 0))[0];
+      for (const n of list) if (n !== keep) mdSelected.add(n.id);
+    }
     mdPaintList();
+    if ($('md-count')) $('md-count').textContent = mdSelected.size + ' selected (' + families + ' duplicate families)';
   });
   on('md-delete', 'click', async () => {
     if (!mdSelected.size) return;

@@ -72,6 +72,82 @@ function sideLink(href, label, active) {
   return `<a class="side${active ? ' active' : ''}" href="${href}">${esc(label)}</a>`;
 }
 
+// Minimal graph viewer for the exported site: rotatable/zoomable THREE.Points
+// scatter of the vault graph with hover titles and click-through to pages.
+const GRAPH_COMMON = String.raw`
+const Graph3D = (() => {
+  function mount(containerId, graph, opts) {
+    const el = document.getElementById(containerId);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0d1117);
+    const camera = new THREE.PerspectiveCamera(55, el.clientWidth / el.clientHeight, 0.1, 2000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(el.clientWidth, el.clientHeight);
+    el.appendChild(renderer.domElement);
+    const N = graph.nodes.length;
+    const pos = new Float32Array(N * 3);
+    const R = Math.max(20, Math.sqrt(N) * 6);
+    // deterministic golden-spiral sphere layout (stable, no physics needed)
+    graph.nodes.forEach((n, i) => {
+      const k = (i + 0.5) / N, phi = Math.acos(1 - 2 * k), theta = Math.PI * (1 + Math.sqrt(5)) * i;
+      pos[i*3] = R * Math.sin(phi) * Math.cos(theta);
+      pos[i*3+1] = R * Math.cos(phi);
+      pos[i*3+2] = R * Math.sin(phi) * Math.sin(theta);
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({ color: 0x58a6ff, size: 4, sizeAttenuation: true });
+    const points = new THREE.Points(geo, mat);
+    scene.add(points);
+    // edges
+    const lpos = [];
+    const idx = new Map(graph.nodes.map((n, i) => [n.id, i]));
+    for (const l of graph.links) {
+      const a = idx.get(l.source), b = idx.get(l.target);
+      if (a === undefined || b === undefined) continue;
+      lpos.push(pos[a*3], pos[a*3+1], pos[a*3+2], pos[b*3], pos[b*3+1], pos[b*3+2]);
+    }
+    const lgeo = new THREE.BufferGeometry();
+    lgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lpos), 3));
+    scene.add(new THREE.LineSegments(lgeo, new THREE.LineBasicMaterial({ color: 0x305a86, transparent: true, opacity: 0.5 })));
+    let theta = 0.6, phi = 1.2, radius = R * 2.6, drag = 0, px = 0, py = 0;
+    el.addEventListener('pointerdown', e => { drag = 1; px = e.clientX; py = e.clientY; });
+    window.addEventListener('pointerup', () => { drag = 0; });
+    el.addEventListener('pointermove', e => {
+      if (drag) { theta -= (e.clientX - px) * 0.005; phi = Math.max(0.1, Math.min(3, phi - (e.clientY - py) * 0.005)); px = e.clientX; py = e.clientY; }
+      else {
+        // hover pick
+        const rect = renderer.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+        const ray = new THREE.Raycaster(); ray.setFromCamera(mouse, camera);
+        ray.params.Points.threshold = 3;
+        const hits = ray.intersectObject(points);
+        opts.onHover && opts.onHover(hits.length ? graph.nodes[hits[0].index] : null);
+      }
+    });
+    el.addEventListener('wheel', e => { e.preventDefault(); radius = Math.max(10, Math.min(R * 8, radius + e.deltaY * 0.05)); }, { passive: false });
+    renderer.domElement.addEventListener('click', () => {});
+    el.addEventListener('click', e => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+      const ray = new THREE.Raycaster(); ray.setFromCamera(mouse, camera);
+      ray.params.Points.threshold = 3;
+      const hits = ray.intersectObject(points);
+      if (hits.length && opts.onOpen) opts.onOpen(graph.nodes[hits[0].index]);
+    });
+    function tick() {
+      requestAnimationFrame(tick);
+      camera.position.set(radius * Math.sin(phi) * Math.cos(theta), radius * Math.cos(phi), radius * Math.sin(phi) * Math.sin(theta));
+      camera.lookAt(0, 0, 0);
+      renderer.render(scene, camera);
+    }
+    window.addEventListener('resize', () => { camera.aspect = el.clientWidth / el.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(el.clientWidth, el.clientHeight); });
+    tick();
+  }
+  return { mount };
+})();
+`;
+
 function exportSite(vault, outDir, opts) {
   opts = opts || {};
   const notes = vault.notes;
@@ -162,9 +238,13 @@ function exportSite(vault, outDir, opts) {
 <script src="graph-common.js"></script>
 <script>
 const DATA = ${graphData};
-Graph3D.mount('wrap', DATA, { label: n => n.title, onOpen: n => { location.href = hrefOf[n.id] || 'index.html'; } });
 const hrefOf = {};
 ${notes.map(n => `hrefOf[${JSON.stringify(n.id)}]=${JSON.stringify(hrefOf.get(n.id))};`).join('\n')}
+const tip = document.getElementById('tip');
+Graph3D.mount('wrap', DATA, {
+  onOpen: n => { location.href = hrefOf[n.id] || 'index.html'; },
+  onHover: n => { if (n) { tip.textContent = n.title; tip.style.display = 'block'; } else { tip.style.display = 'none'; } },
+});
 document.getElementById('loading').remove();
 document.getElementById('go').onclick = () => {
   const q = document.getElementById('q').value.toLowerCase();
@@ -181,7 +261,14 @@ document.getElementById('go').onclick = () => {
     `<h1>Wiki</h1><p>${notes.length} notes &middot; ${vault.graph.links.length} links &middot; <a href="graph.html">Open 3D graph</a></p>
      <h2>Tags</h2><div>${tagCloud || '<i>none</i>'}</div><h2>All notes</h2>` + allNotes, sidebarHtml, 'wiki.css'));
 
-  // graph-common.js + three.min.js copied by caller (server.js) into outDir.
+  // Self-contained graph page: vendor three.js + the graph engine live next to it.
+  const vendorDir = path.join(__dirname, '..', 'public', 'vendor');
+  const threeSrc = path.join(vendorDir, 'three.min.js');
+  if (fs.existsSync(threeSrc)) fs.copyFileSync(threeSrc, path.join(outDir, 'three.min.js'));
+  // graph.html's engine: a tiny shim reusing the app's world.js is overkill for a
+  // static page; instead graph-common.js is a minimal THREE-based scatter viewer
+  // generated here (see GRAPH_COMMON below) so the exported site has no deps.
+  write(path.join(outDir, 'graph-common.js'), GRAPH_COMMON);
   return { pages: notes.length + tagPages.size + 3, outDir };
 }
 
