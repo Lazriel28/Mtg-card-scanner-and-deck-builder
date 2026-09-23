@@ -134,7 +134,34 @@ PC straight into your vault:
 The importer refuses to run when the chosen folder is the vault itself —
 otherwise you'd duplicate everything.
 
-## 7. Starting the app
+## 7. The MTG workshop (🃏)
+
+A new tab in the left rail — your Magic: The Gathering cards, offline, next to
+your world.
+
+**One-time setup:** run `node scripts/mtg-sync.js` once (needs internet that
+one time). It downloads Scryfall's public card database and saves a local
+index — after that, everything works offline. 38,690 cards, names, mana costs,
+rules text, images.
+
+**📁 Collection** — type a card name and you get live suggestions (exactly, or
+partially typed); press **Enter** to see the full card, with art. You can also
+paste a whole decklist — `4x Lightning Bolt`, `2 Counterspell (LTR) 38` — and
+hit **Add list**. Adjust quantities with the number boxes; ✕ removes.
+Everything is stored locally.
+
+**🧠 Deck builder** — pick a color (or leave it on **Auto**, where the app
+learns your favorite colors from the decks you build over time) and your
+collection's size, then **Build me a deck**. It reads *your* cards only, fills
+land slots, shows a mana-curve chart, and — because building a deck is only
+half the job — a **"What beats this deck"** section: structural weaknesses and
+the counter-cards *you already own* that punish it.
+
+**⚔️ Playground** — life counter, d20, coin flip, and a battlefield where you
+can drop cards (with the same type-as-you-search suggestions), tap them, stack
++1/+1 counters, and remove them. Playtest your new deck without leaving the app.
+
+## 8. Starting the app
 
 - **`Start WorldForge.bat`** — opens the app; the black cmd window now closes
   by itself (nothing to close manually).
@@ -142,7 +169,7 @@ otherwise you'd duplicate everything.
   Pin either to your taskbar; after the one-time `npm install` no terminal is
   ever needed.
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom | Fix |
 |---|---|
@@ -154,7 +181,7 @@ otherwise you'd duplicate everything.
 
 ---
 
-## 9. On the roadmap
+## 10. On the roadmap
 
 Greyed-out rail buttons are promised, not dead:
 

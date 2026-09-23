@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' vault-asset: data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' vault-asset: data: https://cards.scryfall.io;">
 <title>WorldForge</title>
 <link rel="stylesheet" href="app.css">
 </head>
@@ -11,7 +11,7 @@
   <nav id="rail">
     <div class="brand" title="WorldForge">◆</div>
     <button class="rail-btn active" data-view="world" title="World (3D graph)">🌐</button>
-    <button class="rail-btn" data-view="cards" title="Cards" disabled>🃏</button>
+    <button class="rail-btn" data-view="cards" title="MTG workshop">🃏</button>
     <button class="rail-btn" data-view="maps" title="Maps (M3)" disabled>🗺️</button>
     <button class="rail-btn" data-view="publish" title="Publish (M4)" disabled>📖</button>
     <div class="rail-spacer"></div>
@@ -63,7 +63,60 @@
       <div id="tooltip"></div>
     </section>
 
-    <section id="view-cards" class="view"><p class="muted pad">Cards arrive in M2 — your notes will appear here grouped by type.</p></section>
+    <section id="view-cards" class="view">
+      <div class="mtg-wrap">
+        <div class="mtg-tabs">
+          <button class="mtg-tab active" data-mtg-tab="collection">📁 Collection</button>
+          <button class="mtg-tab" data-mtg-tab="deck">🧠 Deck builder</button>
+          <button class="mtg-tab" data-mtg-tab="battlefield">⚔️ Playground</button>
+        </div>
+
+        <div class="mtg-pane active" id="mtg-pane-collection">
+          <div class="mtg-searchbar">
+            <input id="mtg-q" placeholder="Find a card… (type, then Enter to add to collection)" autocomplete="off">
+            <div id="mtg-ac" class="mtg-ac hidden"></div>
+          </div>
+          <div id="mtg-card-info" class="mtg-card-info hidden"></div>
+          <div class="mtg-importrow">
+            <textarea id="mtg-paste" rows="3" placeholder="Paste a decklist, one card per line — “4x Lightning Bolt”, “2 Counterspell (LTR) 38” — and I'll read it"></textarea>
+            <button id="mtg-paste-add">Add list</button>
+            <span id="mtg-paste-status" class="muted"></span>
+          </div>
+          <div class="mtg-coll-head"><b id="mtg-coll-count">0</b><span class="muted"> cards in your collection (stored locally)</span></div>
+          <div id="mtg-coll" class="mtg-coll"></div>
+        </div>
+
+        <div class="mtg-pane" id="mtg-pane-deck">
+          <div class="mtg-deckbar">
+            <select id="mtg-d-colors" title="Deck colors">
+              <option value="">🎯 Auto — learned from you</option>
+              <option value="W">White</option><option value="U">Blue</option>
+              <option value="B">Black</option><option value="R">Red</option>
+              <option value="G">Green</option><option value="C">Colorless</option>
+            </select>
+            <select id="mtg-d-size" title="Deck size">
+              <option value="100">100 — Commander</option>
+              <option value="60">60 — Standard</option>
+              <option value="40">40 — Sealed</option>
+            </select>
+            <button id="mtg-d-build">Build me a deck</button>
+          </div>
+          <div id="mtg-d-out"></div>
+        </div>
+
+        <div class="mtg-pane" id="mtg-pane-battlefield">
+          <div class="mtg-playbar">
+            <span class="mtg-life-group"><button id="mtg-life-minus">−</button><span id="mtg-life">20</span><button id="mtg-life-plus">＋</button></span>
+            <button id="mtg-d20">🎲 d20</button>
+            <button id="mtg-coin">🪙 Coin</button>
+            <input id="mtg-bf-add" placeholder="put a card on the battlefield…" autocomplete="off">
+            <div id="mtg-bf-ac" class="mtg-ac hidden"></div>
+          </div>
+          <div id="mtg-bf-result" class="mtg-bf-result"></div>
+          <div id="mtg-battlefield"></div>
+        </div>
+      </div>
+    </section>
     <section id="view-maps" class="view"><p class="muted pad">Maps arrive in M3.</p></section>
     <section id="view-publish" class="view"><p class="muted pad">Publish arrives in M4 — one click to a free hosted wiki.</p></section>
   </main>

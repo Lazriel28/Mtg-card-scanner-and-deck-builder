@@ -10,7 +10,7 @@
   <nav id="rail">
     <div class="brand">◆</div>
     <button class="rail-btn active" data-view="world">🌐</button>
-    <button class="rail-btn" data-view="cards" disabled>🃏</button>
+    <button class="rail-btn" data-view="cards">🃏</button>
     <button class="rail-btn" data-view="maps" disabled>🗺️</button>
     <button class="rail-btn" data-view="publish" disabled>📖</button>
     <div class="rail-spacer"></div>
@@ -60,7 +60,60 @@
       <div id="scene"></div>
       <div id="tooltip"></div>
     </section>
-    <section id="view-cards" class="view"><p class="muted pad">Cards arrive in M2.</p></section>
+    <section id="view-cards" class="view">
+      <div class="mtg-wrap">
+        <div class="mtg-tabs">
+          <button class="mtg-tab active" data-mtg-tab="collection">📁 Collection</button>
+          <button class="mtg-tab" data-mtg-tab="deck">🧠 Deck builder</button>
+          <button class="mtg-tab" data-mtg-tab="battlefield">⚔️ Playground</button>
+        </div>
+
+        <div class="mtg-pane active" id="mtg-pane-collection">
+          <div class="mtg-searchbar">
+            <input id="mtg-q" placeholder="Find a card… (type, then Enter to add to collection)" autocomplete="off">
+            <div id="mtg-ac" class="mtg-ac hidden"></div>
+          </div>
+          <div id="mtg-card-info" class="mtg-card-info hidden"></div>
+          <div class="mtg-importrow">
+            <textarea id="mtg-paste" rows="3" placeholder="Paste a decklist, one card per line — “4x Lightning Bolt”, “2 Counterspell (LTR) 38” — and I'll read it"></textarea>
+            <button id="mtg-paste-add">Add list</button>
+            <span id="mtg-paste-status" class="muted"></span>
+          </div>
+          <div class="mtg-coll-head"><b id="mtg-coll-count">0</b><span class="muted"> cards in your collection (stored locally)</span></div>
+          <div id="mtg-coll" class="mtg-coll"></div>
+        </div>
+
+        <div class="mtg-pane" id="mtg-pane-deck">
+          <div class="mtg-deckbar">
+            <select id="mtg-d-colors" title="Deck colors">
+              <option value="">🎯 Auto — learned from you</option>
+              <option value="W">White</option><option value="U">Blue</option>
+              <option value="B">Black</option><option value="R">Red</option>
+              <option value="G">Green</option><option value="C">Colorless</option>
+            </select>
+            <select id="mtg-d-size" title="Deck size">
+              <option value="100">100 — Commander</option>
+              <option value="60">60 — Standard</option>
+              <option value="40">40 — Sealed</option>
+            </select>
+            <button id="mtg-d-build">Build me a deck</button>
+          </div>
+          <div id="mtg-d-out"></div>
+        </div>
+
+        <div class="mtg-pane" id="mtg-pane-battlefield">
+          <div class="mtg-playbar">
+            <span class="mtg-life-group"><button id="mtg-life-minus">−</button><span id="mtg-life">20</span><button id="mtg-life-plus">＋</button></span>
+            <button id="mtg-d20">🎲 d20</button>
+            <button id="mtg-coin">🪙 Coin</button>
+            <input id="mtg-bf-add" placeholder="put a card on the battlefield…" autocomplete="off">
+            <div id="mtg-bf-ac" class="mtg-ac hidden"></div>
+          </div>
+          <div id="mtg-bf-result" class="mtg-bf-result"></div>
+          <div id="mtg-battlefield"></div>
+        </div>
+      </div>
+    </section>
     <section id="view-maps" class="view"><p class="muted pad">Maps arrive in M3.</p></section>
     <section id="view-publish" class="view"><p class="muted pad">Publish arrives in M4.</p></section>
   </main>
@@ -78,6 +131,45 @@
 </div>
 <div id="manual-overlay" class="hidden"><iframe id="manual-frame" src="about:blank"></iframe><button id="manual-close" title="Close (Esc)">✕</button></div>
 <script src="vendor/three.min.js"></script>
+<script>
+// Tiny MTG fixture index for the harness (same compact shape as mtg-cards.json).
+function mtgMock() {
+  const CARDS = [
+    { n: 'Lightning Bolt', mc: '{R}', c: 1, col: ['R'], t: 'Instant', o: 'Deals 3 damage to any target.', kw: [], im: null, _cn: undefined },
+    { n: 'Counterspell', mc: '{U}{U}', c: 2, col: ['U'], t: 'Instant', o: 'Counter target spell.', kw: [], im: null, _cn: undefined },
+    { n: 'Countersquall', mc: '{U}{B}', c: 2, col: ['U','B'], t: 'Instant', o: 'Counter target spell. Its controller loses 2 life.', kw: [], im: null, _cn: undefined },
+    { n: 'Serra Angel', mc: '{3}{W}{W}', c: 5, col: ['W'], t: 'Creature — Angel', o: 'Vigilance, flying', kw: ['Flying','Vigilance'], pt: '4/4', im: null, _cn: undefined },
+    { n: 'Divination', mc: '{2}{U}', c: 3, col: ['U'], t: 'Sorcery', o: 'Draw two cards.', kw: [], im: null, _cn: undefined },
+    { n: 'Mountain', mc: '', c: 0, col: [], t: 'Basic Land — Mountain', o: '', kw: [], im: null, _cn: undefined },
+    { n: 'Island', mc: '', c: 0, col: [], t: 'Basic Land — Island', o: '', kw: [], im: null, _cn: undefined },
+  ];
+  const view = c => c && ({ name: c.n, mana: c.mc, cmc: c.c, colors: c.col, type: c.t, text: c.o, keywords: c.kw, pt: c.pt, image: c.im, faces: c._cn });
+  const find = n => CARDS.find(c => c.n.toLowerCase() === String(n).toLowerCase());
+  const ls = { get: () => { try { return JSON.parse(localStorage.wfMockColl || '{}'); } catch { return {}; } }, set: o => { localStorage.wfMockColl = JSON.stringify(o); } };
+  return {
+    mtgSearch: async q => { const s = q.toLowerCase(); return { ok: true, data: CARDS.filter(c => c.n.toLowerCase().includes(s)).slice(0, 12).map(view) }; },
+    mtgCard: async n => ({ ok: true, data: view(find(n)) }),
+    mtgCollection: async () => ({ ok: true, data: Object.entries(ls.get()).map(([n, qty]) => ({ ...view(find(n)), qty })).filter(c => c.name) }),
+    mtgCollectionAdd: async lines => {
+      const coll = ls.get(); const added = [], skipped = [];
+      for (const line of lines) {
+        const m = line.trim().match(/^(\d+)\s*[xX]?\s+(.*)$/) || [null, 1, line.trim()];
+        const qty = parseInt(m[1], 10) || 1, name = m[2];
+        if (find(name)) { coll[name] = (coll[name] || 0) + qty; added.push(name); } else skipped.push(name);
+      }
+      ls.set(coll); return { ok: true, data: { added, skipped } };
+    },
+    mtgCollectionSet: async (n, qty) => { const c = ls.get(); if (qty <= 0) delete c[n]; else c[n] = qty; ls.set(c); return { ok: true, data: c }; },
+    mtgSuggestDeck: async opts => {
+      const coll = ls.get(); const size = (opts && opts.size) || 100;
+      const deck = Object.entries(coll).map(([n, qty]) => ({ ...view(find(n)), qty: Math.min(qty, 4) })).filter(c => c.name);
+      const total = deck.reduce((a, d) => a + d.qty, 0);
+      return { ok: true, data: { colors: ['U'], size: total, deck, curve: { 0: 0, 1: 4, 2: 6, 3: 4, 4: 2, '5+': 1 }, notes: total < size ? [`collection covers ${total} of ${size} — harness fixture`] : [] } };
+    },
+    mtgCounters: async () => ({ ok: true, data: { colors: ['U'], creatureCount: 4, avgCmc: 2.6, threats: [{ name: 'Serra Angel', score: 9 }], weaknesses: ['Creature-heavy — board wipes clear the board'], counters: [{ name: 'Wrath of God', qty: 2, why: 'board wipe — resets their creatures', mana: '{2}{W}{W}', cmc: 4, colors: ['W'], type: 'Sorcery' }] } }),
+  };
+}
+</script>
 <script>
 // ---- window.wf mock backed by harness-data.json ----
 (async function () {
@@ -102,8 +194,10 @@
       return { ok: true, id: rel };
     },
     openPath: async () => {},
+    // ---- MTG mock: tiny inline index + localStorage collection ----
+    ...(mtgMock()),
   };
-  const V = 'fix1';
+  const V = 'mtg1';
   const s = document.createElement('script');
   s.src = 'vendor/three.min.js';
   s.onload = () => {

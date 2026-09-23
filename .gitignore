@@ -8,3 +8,8 @@ vvd.lnk
 worldforge/demo-vault/.trash/
 worldforge/demo-vault/.worldforge/
 worldforge/demo-vault/imports/
+
+# MTG card index (regenerate with: node scripts/mtg-sync.js)
+worldforge/data/mtg-cards.json
+worldforge/data/mtg-oracle-raw.jsonl.gz
+worldforge/.wf-*.log

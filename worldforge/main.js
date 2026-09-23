@@ -9,8 +9,10 @@ const { scanVault } = require('./src/vault');
 const { renderMarkdown } = require('./src/md');
 const { importNotes } = require('./src/importer');
 const { setTypeInRaw } = require('./src/types');
+const mtg = require('./src/mtg');
 
 const DATA_DIR = path.join(__dirname, 'data');
+mtg.setDataDir(DATA_DIR); // MTG card index + collection live alongside vault config
 const CONFIG = path.join(DATA_DIR, 'config.json');
 
 let vault = null;
@@ -201,3 +203,21 @@ ipcMain.handle('wf:open-path', (e, dir) => {
   if (dir && fs.existsSync(dir)) { shell.openPath(dir); return { ok: true }; }
   return { ok: false };
 });
+
+// ---------- MTG ----------
+const wrap = fn => async (e, ...args) => {
+  try { return { ok: true, data: await fn(...args) }; }
+  catch (err) { return { ok: false, error: String(err.message || err) }; }
+};
+
+ipcMain.handle('mtg:search', wrap(q => mtg.search(q, 12)));
+ipcMain.handle('mtg:card', wrap(name => mtg.cardView(mtg.get(name))));
+ipcMain.handle('mtg:collection', wrap(() => mtg.collectionCards()));
+ipcMain.handle('mtg:collection-add', wrap(names => mtg.collectionAdd(names)));
+ipcMain.handle('mtg:collection-set', wrap((name, qty) => mtg.collectionSet(name, qty)));
+ipcMain.handle('mtg:suggest-deck', wrap(opts => {
+  const deck = mtg.suggestDeck(opts);
+  mtg.recordDeck(deck.deck); // every build teaches the suggester your taste
+  return deck;
+}));
+ipcMain.handle('mtg:counters', wrap(names => mtg.analyzeCounters(names)));

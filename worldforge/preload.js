@@ -19,4 +19,12 @@ contextBridge.exposeInMainWorld('wf', {
   copyText: (text) => ipcRenderer.invoke('wf:copy-text', text),
   deleteNote: (id) => ipcRenderer.invoke('wf:delete-note', id),
   openPath: (dir) => ipcRenderer.invoke('wf:open-path', dir),
+  // MTG
+  mtgSearch: (q) => ipcRenderer.invoke('mtg:search', q),
+  mtgCard: (name) => ipcRenderer.invoke('mtg:card', name),
+  mtgCollection: () => ipcRenderer.invoke('mtg:collection'),
+  mtgCollectionAdd: (names) => ipcRenderer.invoke('mtg:collection-add', names),
+  mtgCollectionSet: (name, qty) => ipcRenderer.invoke('mtg:collection-set', name, qty),
+  mtgSuggestDeck: (opts) => ipcRenderer.invoke('mtg:suggest-deck', opts),
+  mtgCounters: (names) => ipcRenderer.invoke('mtg:counters', names),
 });

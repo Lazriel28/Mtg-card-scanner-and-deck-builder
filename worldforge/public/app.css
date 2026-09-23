@@ -117,3 +117,59 @@ body { font-family:'Segoe UI', system-ui, sans-serif; background:var(--bg); colo
 #manual-frame { flex:1; max-width:940px; border:1px solid var(--border); border-radius:12px; background:var(--bg); }
 #manual-close { position:fixed; top:16px; right:28px; width:34px; height:34px; border-radius:9px; background:#21262d; color:var(--text); border:1px solid var(--border); font-size:15px; cursor:pointer; }
 #manual-close:hover { background:#30363d; }
+
+/* ============ MTG workshop ============ */
+.mtg-wrap { display:flex; flex-direction:column; height:100%; padding:14px 18px; gap:10px; overflow:hidden; }
+.mtg-tabs { display:flex; gap:8px; }
+.mtg-tab { background:#21262d; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:7px 14px; cursor:pointer; font-size:13px; }
+.mtg-tab.active { background:#2f81f7; border-color:#2f81f7; color:#fff; }
+.mtg-pane { display:none; flex:1; min-height:0; flex-direction:column; gap:10px; }
+.mtg-pane.active { display:flex; }
+.mtg-searchbar { position:relative; }
+#mtg-q { width:100%; box-sizing:border-box; }
+.mtg-ac { position:absolute; top:100%; left:0; right:0; z-index:30; background:#161b22; border:1px solid var(--border); border-radius:0 0 8px 8px; max-height:280px; overflow:auto; box-shadow:0 8px 20px #000a; }
+.mtg-ac-item { padding:6px 12px; cursor:pointer; display:flex; justify-content:space-between; gap:8px; font-size:13px; }
+.mtg-ac-item:hover, .mtg-ac-item.sel { background:#21262d; }
+.mtg-ac-item .mana { color:#8b949e; font-size:12px; }
+.mtg-card-info { background:#161b22; border:1px solid var(--border); border-radius:10px; padding:12px; display:flex; gap:14px; }
+.mtg-card-info img { width:180px; border-radius:8px; }
+.mtg-card-info .info { flex:1; }
+.mtg-card-info h3 { margin:0 0 2px; }
+.mtg-card-info .cost { color:#8b949e; margin-bottom:6px; }
+.mtg-card-info .text { font-size:13px; line-height:1.45; white-space:pre-wrap; }
+.mtg-card-info .kw { color:#d29922; font-size:12px; margin-top:4px; }
+.mtg-importrow { display:flex; gap:8px; align-items:flex-start; }
+#mtg-paste { flex:1; font-size:12px; }
+.mtg-coll-head { font-size:13px; }
+.mtg-coll { flex:1; overflow:auto; display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:6px; align-content:start; }
+.mtg-coll-item { display:flex; align-items:center; gap:8px; background:#161b22; border:1px solid var(--border); border-radius:8px; padding:5px 8px; font-size:12.5px; }
+.mtg-coll-item .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+.mtg-coll-item .nm:hover { text-decoration:underline; }
+.mtg-coll-item .pip { width:9px; height:9px; border-radius:50%; flex:none; }
+.mtg-coll-item input { width:38px; background:#0d1117; color:var(--text); border:1px solid var(--border); border-radius:5px; padding:2px 4px; font-size:12px; }
+.mtg-coll-item button { background:#21262d; color:var(--text); border:1px solid var(--border); border-radius:5px; cursor:pointer; padding:2px 7px; }
+.mtg-deckbar, .mtg-playbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+#mtg-d-build { background:#238636; color:#fff; border:1px solid #2ea043; border-radius:8px; padding:7px 16px; cursor:pointer; }
+#mtg-d-out { flex:1; overflow:auto; min-height:0; }
+.deck-notes { background:#161b22; border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:12.5px; margin-bottom:10px; }
+.deck-notes li { margin:2px 0; }
+.deck-cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.deck-col h4 { margin:4px 0 6px; font-size:13px; color:#8b949e; }
+.deck-line { display:flex; justify-content:space-between; gap:8px; padding:3px 8px; border-radius:6px; font-size:12.5px; cursor:pointer; }
+.deck-line:hover { background:#21262d; }
+.deck-line .q { color:#d29922; }
+.curve { display:flex; gap:4px; align-items:flex-end; height:56px; margin:8px 0; }
+.curve div { background:#2f81f7; border-radius:3px 3px 0 0; min-width:18px; position:relative; }
+.curve div span { position:absolute; top:-16px; left:50%; transform:translateX(-50%); font-size:10px; color:#8b949e; }
+.counter-item { background:#161b22; border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:12.5px; margin-bottom:6px; }
+.counter-item b { color:#f85149; }
+.mtg-life-group { display:flex; align-items:center; gap:8px; background:#161b22; border:1px solid var(--border); border-radius:8px; padding:4px 10px; }
+#mtg-life { font-size:20px; min-width:44px; text-align:center; }
+.mtg-life-group button { background:#21262d; color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer; width:26px; }
+.mtg-bf-result { font-size:15px; min-height:22px; color:#d29922; }
+#mtg-battlefield { flex:1; display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start; overflow:auto; }
+.bf-card { width:120px; background:#161b22; border:1px solid var(--border); border-radius:8px; padding:6px; font-size:11px; position:relative; cursor:pointer; user-select:none; }
+.bf-card.tapped { transform:rotate(90deg); }
+.bf-card .cnt { position:absolute; top:-7px; right:-7px; background:#d29922; color:#000; border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:11px; }
+.bf-card .ctrl { display:flex; gap:4px; margin-top:4px; }
+.bf-card .ctrl button { flex:1; background:#21262d; color:var(--text); border:1px solid var(--border); border-radius:4px; font-size:10px; cursor:pointer; padding:2px 0; }

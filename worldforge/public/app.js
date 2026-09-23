@@ -390,8 +390,243 @@
       btn.classList.add('active');
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       $('view-' + btn.dataset.view).classList.add('active');
+      if (btn.dataset.view === 'cards') Mtg.init(); // lazy-load the workshop
     });
   });
+
+  // ---------- MTG workshop ----------
+  const Mtg = (function () {
+    const COLORS = { W: '#f5f0dc', U: '#3b7dd8', B: '#4b3a5a', R: '#d84b3b', G: '#3b9e5a', C: '#8b8b8b' };
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let ready = false;
+    let acItems = [], acSel = -1, acTarget = null;   // autocomplete state
+    let bf = [];                                      // battlefield cards
+
+    const mw = (name) => window.wf || (window.wfHarnessMock ? window.wfHarnessMock() : null); // bridge (harness injects a mock)
+
+    async function init() {
+      if (ready) return; ready = true;
+      wireTabs(); wireSearch(); wireDeck(); wireBattlefield();
+      await refreshCollection();
+    }
+
+    function wireTabs() {
+      document.querySelectorAll('.mtg-tab').forEach(t => t.addEventListener('click', () => {
+        document.querySelectorAll('.mtg-tab').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.mtg-pane').forEach(p => p.classList.remove('active'));
+        t.classList.add('active');
+        $('mtg-pane-' + t.dataset.mtgTab).classList.add('active');
+      }));
+    }
+
+    // generic autocomplete: shared by card search and battlefield add
+    function attachAC(input, popup, onPick) {
+      let deb;
+      input.addEventListener('input', () => {
+        clearTimeout(deb);
+        deb = setTimeout(async () => {
+          const q = input.value.trim();
+          if (!q) { hideAC(); return; }
+          const res = await mw().mtgSearch(q);
+          acItems = (res && res.ok ? res.data : []).slice(0, 12);
+          acSel = -1; acTarget = input;
+          popup.innerHTML = acItems.length
+            ? acItems.map((c, i) => `<div class="mtg-ac-item" data-i="${i}"><span>${esc(c.name)}</span><span class="mana">${esc(c.mana || c.type || '')}</span></div>`).join('')
+            : '<div class="mtg-ac-item muted">no matches</div>';
+          popup.classList.remove('hidden');
+        }, 120);
+      });
+      input.addEventListener('keydown', e => {
+        if (popup.classList.contains('hidden')) {
+          if (e.key === 'Enter') onPick(input.value.trim());
+          return;
+        }
+        if (e.key === 'ArrowDown') { e.preventDefault(); acSel = Math.min(acSel + 1, acItems.length - 1); paintAC(popup); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); acSel = Math.max(acSel - 1, 0); paintAC(popup); }
+        else if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          const pick = acSel >= 0 ? acItems[acSel] : acItems[0];
+          if (pick) { input.value = pick.name; onPick(pick.name); }
+          else onPick(input.value.trim());
+          hideAC();
+        } else if (e.key === 'Escape') { hideAC(); e.stopPropagation(); }
+      });
+      popup.addEventListener('mousedown', e => {
+        const item = e.target.closest('.mtg-ac-item[data-i]');
+        if (item) { const pick = acItems[+item.dataset.i]; input.value = pick.name; onPick(pick.name); hideAC(); }
+      });
+    }
+    function paintAC(popup) {
+      popup.querySelectorAll('.mtg-ac-item').forEach((el, i) => el.classList.toggle('sel', i === acSel));
+    }
+    function hideAC() {
+      document.querySelectorAll('.mtg-ac').forEach(p => p.classList.add('hidden'));
+      acItems = []; acSel = -1;
+    }
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.mtg-searchbar') && !e.target.closest('.mtg-playbar')) hideAC();
+    });
+
+    function colorPips(colors) {
+      return (colors && colors.length ? colors : ['C']).map(c =>
+        `<span class="pip" style="background:${COLORS[c] || COLORS.C}" title="${c}"></span>`).join('');
+    }
+
+    async function pickCard(name) {          // Enter in the card search
+      if (!name) return;
+      const res = await mw().mtgCard(name);
+      const c = res && res.ok ? res.data : null;
+      if (!c) { $('mtg-card-info').classList.add('hidden'); return; }
+      const el = $('mtg-card-info');
+      el.classList.remove('hidden');
+      el.innerHTML = `
+        ${c.image ? `<img src="${esc(c.image)}" alt="">` : ''}
+        <div class="info">
+          <h3>${esc(c.name)} ${colorPips(c.colors)}</h3>
+          <div class="cost">${esc(c.mana || '')} · ${esc(c.type || '')}</div>
+          <div class="text">${esc(c.text || '')}</div>
+          ${c.keywords && c.keywords.length ? `<div class="kw">${esc(c.keywords.join(', '))}</div>` : ''}
+          ${c.faces ? `<div class="kw">faces: ${esc(c.faces.join(' / '))}</div>` : ''}
+        </div>`;
+      // CSP: external card images only render in Electron; harness shows text
+      refreshCollection();
+    }
+
+    async function refreshCollection() {
+      const res = await mw().mtgCollection();
+      if (!res || !res.ok) return;
+      const cards = res.data;
+      $('mtg-coll-count').textContent = cards.reduce((a, c) => a + c.qty, 0);
+      $('mtg-coll').innerHTML = cards.map(c => `
+        <div class="mtg-coll-item">
+          ${colorPips(c.colors)}
+          <span class="nm" data-card="${esc(c.name)}" title="${esc(c.type || '')}">${esc(c.name)}</span>
+          <input type="number" min="0" value="${c.qty}" data-qty="${esc(c.name)}">
+          <button data-del="${esc(c.name)}" title="Remove">✕</button>
+        </div>`).join('') || '<span class="muted">Collection empty — add cards above.</span>';
+    }
+
+    function wireSearch() {
+      attachAC($('mtg-q'), $('mtg-ac'), pickCard);
+      $('mtg-coll').addEventListener('click', async e => {
+        if (e.target.dataset.del) {
+          await mw().mtgCollectionSet(e.target.dataset.del, 0);
+          refreshCollection();
+        } else if (e.target.dataset.card) pickCard(e.target.dataset.card);
+      });
+      $('mtg-coll').addEventListener('change', async e => {
+        if (e.target.dataset.qty !== undefined) {
+          await mw().mtgCollectionSet(e.target.dataset.qty, Math.max(0, parseInt(e.target.value, 10) || 0));
+          refreshCollection();
+        }
+      });
+      $('mtg-paste-add').addEventListener('click', async () => {
+        const lines = $('mtg-paste').value.split('\n').map(s => s.trim()).filter(Boolean);
+        if (!lines.length) return;
+        const res = await mw().mtgCollectionAdd(lines);
+        if (res && res.ok) {
+          const d = res.data;
+          $('mtg-paste-status').textContent = `added ${d.added.length}, skipped ${d.skipped.length}${d.skipped.length ? ': ' + d.skipped.slice(0, 3).join(', ') : ''}`;
+          $('mtg-paste').value = '';
+          refreshCollection();
+        }
+      });
+    }
+
+    function wireDeck() {
+      $('mtg-d-out').addEventListener('click', e => {
+        const el = e.target.closest('.deck-line');
+        if (el) pickCard(el.dataset.card);
+      });
+      $('mtg-d-build').addEventListener('click', async () => {
+        const btn = $('mtg-d-build');
+        btn.disabled = true; btn.textContent = 'Building…';
+        try {
+          const colSel = $('mtg-d-colors').value;
+          const opts = { size: parseInt($('mtg-d-size').value, 10) };
+          if (colSel) opts.colors = [colSel];
+          const res = await mw().mtgSuggestDeck(opts);
+          if (!res || !res.ok) throw new Error(res && res.error || 'failed');
+          const d = res.data;
+          const names = d.deck.flatMap(c => Array(c.qty).fill(c.name)); // multiplicity matters
+          const cres = await mw().mtgCounters(names);
+          renderDeck(d, cres && cres.ok ? cres.data : null);
+        } catch (err) { $('mtg-d-out').innerHTML = `<div class="deck-notes">Build failed: ${esc(err.message)}</div>`; }
+        btn.disabled = false; btn.textContent = 'Build me a deck';
+        refreshCollection();
+      });
+    }
+
+    function renderDeck(d, counters) {
+      const curveMax = Math.max(1, ...Object.values(d.curve));
+      const curve = Object.entries(d.curve).map(([k, v]) =>
+        `<div style="height:${Math.round(v / curveMax * 44) + 4}px"><span>${v || ''}</span></div>`).join('');
+      const line = c => `<div class="deck-line" data-card="${esc(c.name)}"><span>${esc(c.name)}</span><span class="q">${c.qty}</span></div>`;
+      const nonland = d.deck.filter(c => !/Land/.test(c.type));
+      const lands = d.deck.filter(c => /Land/.test(c.type));
+      const groups = {};
+      for (const c of nonland) {
+        const k = c.colors.length ? c.colors.join('') : 'C';
+        (groups[k] = groups[k] || []).push(c);
+      }
+      const groupHtml = Object.entries(groups).map(([k, list]) =>
+        `<div class="deck-col"><h4>${esc(k)} — ${list.reduce((a, c) => a + c.qty, 0)}</h4>${list.map(line).join('')}</div>`).join('');
+      $('mtg-d-out').innerHTML = `
+        ${d.notes && d.notes.length ? `<div class="deck-notes"><ul>${d.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul></div>` : ''}
+        <div class="curve">${curve}</div>
+        <div class="deck-cols">${groupHtml}
+          <div class="deck-col"><h4>Lands — ${lands.reduce((a, c) => a + c.qty, 0)}</h4>${lands.map(line).join('')}</div>
+        </div>
+        ${counters ? `
+          <h4 class="mtg-vs">⚔️ What beats this deck</h4>
+          <div class="deck-notes">${counters.weaknesses.map(w => `<div>• ${esc(w)}</div>`).join('') || '<div>• no obvious structural weakness found</div>'}</div>
+          ${counters.counters.map(c => `<div class="counter-item"><b>${esc(c.name)}</b> ×${c.qty} — ${esc(c.why)}</div>`).join('')}
+        ` : ''}`;
+    }
+
+    function wireBattlefield() {
+      attachAC($('mtg-bf-add'), $('mtg-bf-ac'), addBfCard);
+      $('mtg-life-plus').addEventListener('click', () => { $('mtg-life').textContent = +$('mtg-life').textContent + 1; });
+      $('mtg-life-minus').addEventListener('click', () => { $('mtg-life').textContent = +$('mtg-life').textContent - 1; });
+      $('mtg-d20').addEventListener('click', () => { $('mtg-bf-result').textContent = `🎲 d20: ${1 + Math.floor(Math.random() * 20)}`; });
+      $('mtg-coin').addEventListener('click', () => { $('mtg-bf-result').textContent = '🪙 ' + (Math.random() < 0.5 ? 'Heads' : 'Tails'); });
+      $('mtg-battlefield').addEventListener('click', e => {
+        const card = e.target.closest('.bf-card');
+        if (!card) return;
+        const i = +card.dataset.i;
+        if (e.target.dataset.act === 'tap') bf[i].tapped = !bf[i].tapped;
+        else if (e.target.dataset.act === 'plus') bf[i].counters++;
+        else if (e.target.dataset.act === 'minus') bf[i].counters = Math.max(0, bf[i].counters - 1);
+        else if (e.target.dataset.act === 'x') { bf.splice(i, 1); }
+        paintBf();
+      });
+    }
+
+    async function addBfCard(name) {
+      if (!name) return;
+      const res = await mw().mtgCard(name);
+      if (res && res.ok && res.data) {
+        bf.push({ name: res.data.name, type: res.data.type || '', colors: res.data.colors || [], counters: 0, tapped: false });
+        paintBf();
+      }
+    }
+
+    function paintBf() {
+      $('mtg-battlefield').innerHTML = bf.map((c, i) => `
+        <div class="bf-card ${c.tapped ? 'tapped' : ''}" data-i="${i}">
+          ${c.counters ? `<span class="cnt">${c.counters}</span>` : ''}
+          <b>${esc(c.name)}</b><div class="muted">${esc(c.type)}</div>
+          <div class="ctrl">
+            <button data-act="tap">tap</button>
+            <button data-act="plus">+1/+1</button>
+            <button data-act="minus">−</button>
+            <button data-act="x">✕</button>
+          </div>
+        </div>`).join('');
+    }
+
+    return { init };
+  })();
 
   // ---------- vault picker ----------
   on('btn-vault', 'click', async () => {
