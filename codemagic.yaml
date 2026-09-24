@@ -54,7 +54,5 @@ workflows:
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGNING_ALLOWED=YES || true
     artifacts:
-      - path: "mtg-codex/ios/build/Build/Products/Debug-iphonesimulator/MTGCodex.app"
-        name: iOS Simulator Build
-      - path: "mtg-codex/ios/build/Build/Products/Debug-iphoneos/MTGCodex.app"
-        name: iOS Device Build
+      - "mtg-codex/ios/build/Build/Products/Debug-iphonesimulator/MTGCodex.app"
+      - "mtg-codex/ios/build/Build/Products/Debug-iphoneos/MTGCodex.app"
