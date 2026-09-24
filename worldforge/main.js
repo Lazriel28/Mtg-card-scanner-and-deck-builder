@@ -14,7 +14,6 @@ const tombstones = require('./src/tombstones');
 const mapsStore = require('./src/maps');
 const layoutStore = require('./src/layout');
 const tools = require('./src/vault-tools');
-const { exportSite } = require('./src/export');
 
 const DATA_DIR = path.join(__dirname, 'data');
 mtg.setDataDir(DATA_DIR); // MTG card index + collection live alongside vault config
@@ -281,23 +280,6 @@ ipcMain.handle('maps:remove', wrap((mapId) => {
   return mapsStore.removeMap(vault.root, mapId);
 }));
 
-// ---------- Publish (export static wiki) ----------
-ipcMain.handle('publish:pick-dir', async () => {
-  const r = await dialog.showOpenDialog(win, {
-    title: 'Choose where to build the wiki site (a new subfolder is created)',
-    properties: ['openDirectory', 'createDirectory'],
-  });
-  return r.canceled ? null : r.filePaths[0];
-});
-ipcMain.handle('publish:export', wrap(async (outBase) => {
-  if (!vault) throw new Error('no vault loaded');
-  if (!outBase || !fs.existsSync(outBase)) throw new Error('output folder not found');
-  const stamp = new Date().toISOString().slice(0, 10);
-  const outDir = path.join(outBase, 'wiki-site-' + stamp);
-  const r = exportSite(vault, outDir);
-  shell.openPath(outDir);
-  return r;
-}));
 
 ipcMain.handle('mtg:search', wrap(q => mtg.search(q, 12)));
 ipcMain.handle('mtg:card', wrap(name => mtg.cardView(mtg.get(name))));

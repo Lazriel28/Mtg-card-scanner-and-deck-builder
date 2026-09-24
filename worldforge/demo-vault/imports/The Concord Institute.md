@@ -1,0 +1,1 @@
+With a area of 4,000 acres, pristine, isolated forests and cutting-edge architecture, it is pure unparalleled academic utopic academic perfection. 

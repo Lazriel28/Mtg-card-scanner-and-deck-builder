@@ -187,16 +187,61 @@
     }
     const np = e.target.closest('a.np-link');
     if (np) { e.preventDefault(); return openNote(np.getAttribute('data-note-id')); }
-  });
-
-  // ---------- search ----------
+  });  // ---------- search: world dimming + full-text results panel ----------
+  let searchDeb = null, spActive = -1, spHits = [];
+  function spHighlight(text, q) {
+    const i = text.toLowerCase().indexOf(q.toLowerCase());
+    if (i === -1) return esc(text);
+    return esc(text.slice(0, i)) + '<b>' + esc(text.slice(i, i + q.length)) + '</b>' + esc(text.slice(i + q.length));
+  }
+  function spPaint(q) {
+    const panel = $('search-panel');
+    if (!q) { panel.classList.add('hidden'); panel.innerHTML = ''; spHits = []; spActive = -1; return; }
+    panel.innerHTML = spHits.map((h, i) =>
+      `<div class="sp-item${i === spActive ? ' active' : ''}" role="option" aria-selected="${i === spActive}" data-id="${esc(h.id)}">
+        <div class="t"><span>${spHighlight(h.title, q)}</span><span class="dir">${esc(h.dir || '.')}</span></div>
+        ${h.snippet ? `<div class="snip">${spHighlight(h.snippet, q)}</div>` : ''}
+      </div>`).join('') || '<div class="sp-empty">No notes match — the world highlights still apply.</div>';
+    panel.classList.remove('hidden');
+  }
+  async function spSearch(q) {
+    try {
+      const res = await window.wf.searchAll(q);
+      spHits = res.ok ? res.data : [];
+    } catch { spHits = []; }
+    spActive = spHits.length ? 0 : -1;
+    spPaint(q);
+  }
+  function spClose() { $('search-panel').classList.add('hidden'); spActive = -1; }
   on('search', 'input', e => {
     searchQuery = e.target.value.trim();
     if (world) world.highlight(searchQuery);
+    clearTimeout(searchDeb);
+    if (!searchQuery) { spClose(); return; }
+    searchDeb = setTimeout(() => spSearch(searchQuery), 180);
   });
-
   on('search', 'keydown', e => {
-    if (e.key === 'Enter' && searchQuery && world) world.frameMatches();
+    const panel = $('search-panel');
+    const open = !panel.classList.contains('hidden');
+    if (open && e.key === 'ArrowDown') { spActive = Math.min(spActive + 1, spHits.length - 1); spPaint(searchQuery); e.preventDefault(); }
+    else if (open && e.key === 'ArrowUp') { spActive = Math.max(spActive - 1, 0); spPaint(searchQuery); e.preventDefault(); }
+    else if (open && e.key === 'Enter' && spHits[spActive]) {
+      const id = spHits[spActive].id;
+      spClose();
+      openNote(id);
+      e.preventDefault();
+    }
+    else if (e.key === 'Enter' && searchQuery && world) world.frameMatches();
+    else if (e.key === 'Escape') { spClose(); }
+  });
+  on('search-panel', 'click', e => {
+    const item = e.target.closest('.sp-item');
+    if (!item) return;
+    spClose();
+    openNote(item.dataset.id);
+  });
+  document.addEventListener('mousedown', e => {
+    if (!e.target.closest('#search-panel') && e.target.id !== 'search') spClose();
   });
 
   // ---------- import (📥) ----------
@@ -561,18 +606,6 @@
     return { init };
   })();
 
-  // ---------- publish view ----------
-  on('pub-export', 'click', async () => {
-    const btn = $('pub-export'), status = $('pub-status');
-    try {
-      const dir = await window.wf.publishPickDir();
-      if (!dir) return;
-      btn.disabled = true; status.textContent = 'Building…';
-      const res = await window.wf.publishExport(dir);
-      status.textContent = res.ok ? `Done — ${res.data.pages} pages in ${res.data.outDir}` : ('Failed: ' + res.error);
-    } catch (err) { status.textContent = 'Failed: ' + (err.message || err); }
-    btn.disabled = false;
-  });
 
   // ---------- MTG workshop ----------
   const Mtg = (function () {
@@ -943,6 +976,29 @@
       alert(`Deleted ${res.deleted} note${res.deleted === 1 ? '' : 's'} — in .trash, recoverable.`);
     } catch (err) { alert('Mass delete failed: ' + (err.message || err)); }
   });
+  on('md-merge', 'click', async () => {
+    if (mdSelected.size < 2) { alert('Select at least two notes to merge.'); return; }
+    const ids = [...mdSelected];
+    const winner = ids.reduce((a, b) => {
+      const na = graph.nodes.find(n => n.id === a), nb = graph.nodes.find(n => n.id === b);
+      const sa = na && na.size, sb = nb && nb.size;
+      if (sa > sb) return a; if (sb > sa) return b;
+      const ma = na ? new Date(na.mtime || 0) : new Date(0), mb = nb ? new Date(nb.mtime || 0) : new Date(0);
+      return mb > ma ? b : a;
+    });
+    const first = (graph.nodes.find(n => n.id === winner) || {}).title || 'Merged';
+    const title = prompt(`Merge ${ids.length} notes into one. Title for the merged note:`, first);
+    if (!title) return;
+    try {
+      const res = await window.wf.mergeNotes(ids, { title });
+      const d = res.ok ? res.data : res;
+      mdSelected = new Set();
+      $('mass-delete-overlay').classList.add('hidden');
+      await refreshGraph();
+      await openNote(d.id);
+      alert(`Merged ${ids.length} notes into "${d.id}" (${d.linksUpdated} links rewritten). Sources are in .trash.`);
+    } catch (err) { alert('Merge failed: ' + (err.message || err)); }
+  });
 
   // ---------- vault picker ----------
   on('btn-vault', 'click', async () => {
@@ -1016,7 +1072,7 @@
     { label: 'Vault insights (stats, tags)', run: () => openInsights() },
     { label: 'Vault tools (broken links, backups)', run: () => openInspector() },
     { label: 'Graph settings', run: () => $('btn-graph-settings').click() },
-    { label: 'Publish wiki site', run: () => switchView('publish') },
+
     { label: 'Maps', run: () => switchView('maps') },
     { label: 'MTG workshop', run: () => switchView('cards') },
     { label: 'Open field manual', run: () => $('btn-manual').click() },
@@ -1033,6 +1089,7 @@
     { label: 'Random note', run: () => openRandom() },
     { label: 'Daily note', run: () => createDailyNote() },
     { label: 'Open .trash folder', run: () => window.wf.openTrash() },
+    { label: 'Favorites list', run: () => openFavs() },
     { label: 'Open backups folder', run: () => window.wf.openBackups() },
     { label: 'Find & replace in current note', run: () => subFindReplace() },
     { label: 'Note outline (table of contents)', run: () => subTOC() },
@@ -1422,6 +1479,27 @@
   } catch {}
 
   on('btn-trashed', 'click', () => window.wf.openTrash());
+
+  // ==================== favorites panel (⭐ rail) ====================
+  async function openFavs() {
+    $('favs-overlay').classList.remove('hidden');
+    $('insights-overlay').classList.add('hidden');
+    $('inspector-overlay').classList.add('hidden');
+    $('favs-body').innerHTML = '<span class="muted">Loading…</span>';
+    const r = await window.wf.favorites();
+    const favs = r.ok ? r.data : r;
+    if (!favs.length) { $('favs-body').innerHTML = '<span class="muted">No favorites yet — open a note and tap ☆.</span>'; return; }
+    $('favs-body').innerHTML = favs.map(id => {
+      const n = (graph ? graph.nodes : []).find(x => x.id === id);
+      return `<div class="fav-item"><a data-open="${esc(id)}">★ ${esc(n ? n.title : id)}</a><button class="unstar" data-unstar="${esc(id)}" title="Remove from favorites" aria-label="Remove ${esc(n ? n.title : id)} from favorites">☆</button></div>`;
+    }).join('');
+    $('favs-body').querySelectorAll('[data-open]').forEach(a =>
+      a.addEventListener('click', () => { $('favs-overlay').classList.add('hidden'); openNote(a.dataset.open); }));
+    $('favs-body').querySelectorAll('[data-unstar]').forEach(b =>
+      b.addEventListener('click', async () => { await window.wf.favoriteToggle(b.dataset.unstar); openFavs(); }));
+  }
+  on('btn-favs', 'click', openFavs);
+  on('favs-close', 'click', () => $('favs-overlay').classList.add('hidden'));
 
   // Ctrl+K palette · Ctrl+Z / Ctrl+Y world undo · ? opens the manual
   document.addEventListener('keydown', e => {

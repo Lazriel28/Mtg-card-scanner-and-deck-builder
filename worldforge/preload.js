@@ -38,9 +38,7 @@ contextBridge.exposeInMainWorld('wf', {
   mapsPickImage: () => ipcRenderer.invoke('maps:pick-image'),
   mapsAddImage: (src, name) => ipcRenderer.invoke('maps:add-image', src, name),
   mapsRemove: (id) => ipcRenderer.invoke('maps:remove', id),
-  // Publish
-  publishPickDir: () => ipcRenderer.invoke('publish:pick-dir'),
-  publishExport: (dir) => ipcRenderer.invoke('publish:export', dir),
+
   // vault tools
   searchAll: (q) => ipcRenderer.invoke('wf:search-all', q),
   stats: () => ipcRenderer.invoke('wf:stats'),

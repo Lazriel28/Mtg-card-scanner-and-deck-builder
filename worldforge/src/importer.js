@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const tombstones = require('./tombstones');
 
-const SKIP_DIRS = new Set(['.obsidian', '.git', '.trash', 'node_modules', '.worldforge', 'wiki-site', '.freebuff', '.stfolder']);
+const SKIP_DIRS = new Set(['.obsidian', '.git', '.trash', 'node_modules',  '.worldforge', '.freebuff', '.stfolder']);
 
 function collectFiles(root) {
   const out = [];

@@ -1,0 +1,49 @@
+# dependencies
+node_modules/
+
+# build / packaging output
+build/
+out/
+electron-out/
+dist/
+*.zip
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.pkg
+*.msi
+*.asar
+
+# logs / runtime state
+*.log
+*.pid
+.server.*
+.wf-*.log
+.srv.*
+
+# vscode / editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# user data dirs (keep out of the repo)
+demo-vault/.trash/
+demo-vault/.worldforge/backups/
+demo-vault/.worldforge/tombstones.json
+demo-vault/.obsidian/
+demo-vault/.git/
+mtg-codex/
+
+# temporary harness / preview artifacts
+.harness-cache/
+__pycache__/
+.pytest_cache/
+/srv-log-*.log
+

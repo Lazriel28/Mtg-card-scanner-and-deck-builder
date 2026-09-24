@@ -1,17 +1,56 @@
 {
   "name": "worldforge",
-  "version": "0.1.0",
-  "description": "Offline worldbuilding, book and cinema studio for Obsidian vaults",
+  "version": "0.2.0",
+  "description": "Offline worldbuilding, book and cinema studio for Obsidian vaults. Free replacement for paid wiki/world tools.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node --test"
+    "test": "node --test",
+    "build": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
   },
   "license": "MIT",
   "devDependencies": {
-    "electron": "^33.0.0"
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.worldforge.app",
+    "productName": "WorldForge",
+    "copyright": "Copyright © 2026 WorldForge",
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "icon": "icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "WorldForge"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/*",
+      "!node_modules/.cache/*",
+      "!demo-vault/.trash/**",
+      "!demo-vault/.worldforge/backups/**",
+      "!demo-vault/.worldforge/tombstones.json",
+      "!*.log",
+      "!*.pid",
+      "!server.pid"
+    ],
+    "extraResources": [
+      { "from": "demo-vault", "to": "demo-vault", "filter": ["**/*"] }
+    ]
   },
   "allowScripts": {
-    "electron@33.4.11": true
+    "electron@33.4.11": true,
+    "electron-builder@25.1.8": true
   }
 }

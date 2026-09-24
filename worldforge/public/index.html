@@ -14,7 +14,7 @@
     <button class="rail-btn active" data-view="world" title="World (3D graph)" aria-label="World (3D graph)">🌐</button>
     <button class="rail-btn" data-view="cards" title="MTG workshop" aria-label="MTG workshop">🃏</button>
     <button class="rail-btn" data-view="maps" title="Maps — pin notes onto images" aria-label="Maps">🗺️</button>
-    <button class="rail-btn" data-view="publish" title="Publish — export a static wiki site" aria-label="Publish">📖</button>
+    <button class="rail-btn" id="btn-favs" title="Favorites — your starred notes" aria-label="Favorites">⭐</button>
     <div class="rail-spacer"></div>
     <button class="rail-btn" id="btn-manual" title="Field manual (help)" aria-label="Field manual (help)">❓</button>
     <button class="rail-btn" id="btn-vault" title="Choose vault folder" aria-label="Choose vault folder">📂</button>
@@ -23,7 +23,8 @@
   <main id="main">
     <section id="view-world" class="view active">
       <div class="world-hud">
-        <input id="search" placeholder="Search notes…" aria-label="Search notes" autocomplete="off">
+        <input id="search" placeholder="Search notes… (type for full-text results)" aria-label="Search notes" autocomplete="off">
+        <div id="search-panel" class="hidden" role="listbox" aria-label="Search results"></div>
         <button id="btn-new" class="hud-btn" title="Create a new note">＋ Note</button>
         <button id="btn-import" class="hud-btn" title="Import .md notes from another folder">📥 Import</button>
         <button id="btn-mass-delete" class="hud-btn" title="Delete many notes at once (goes to .trash, recoverable)">🗑 Mass delete</button>
@@ -93,6 +94,10 @@
       <div id="insights-overlay" class="hidden">
         <div class="ov-head"><b>Vault insights</b><button id="insights-close" class="hud-btn" title="Close (Esc)">✕</button></div>
         <div id="insights-body"></div>
+      </div>
+      <div id="favs-overlay" class="hidden">
+        <div class="ov-head"><b>⭐ Favorites</b><button id="favs-close" class="hud-btn" title="Close (Esc)">✕</button></div>
+        <div id="favs-body"></div>
       </div>
       <div id="inspector-overlay" class="hidden">
         <div class="ov-head"><b>Vault tools</b><button id="inspector-close" class="hud-btn" title="Close (Esc)">✕</button></div>
@@ -175,30 +180,7 @@
         </div>
       </div>
     </section>
-    <section id="view-publish" class="view">
-      <div class="pub-wrap">
-        <h2>📖 Publish your wiki</h2>
-        <p class="muted">Builds a complete static website from your vault — every note, tags, backlinks,
-        search, and a 3D graph page. No accounts, no costs: open the folder as-is, or drop it on
-        GitHub Pages / Netlify / Cloudflare Pages for a free hosted wiki.</p>
-        <button id="pub-export">Build wiki site…</button>
-        <span id="pub-status" class="muted" aria-live="polite"></span>
-        <div class="pub-what">
-          <div><b>Included</b><ul>
-            <li>One page per note, wikilinks resolved</li>
-            <li>Tag pages + tag cloud</li>
-            <li>Backlinks & outgoing links per note</li>
-            <li>Client-side note filter</li>
-            <li><b>graph.html</b> — interactive 3D graph of the whole vault</li>
-          </ul></div>
-          <div><b>How to host free</b><ul>
-            <li>GitHub Pages: push the folder, enable Pages</li>
-            <li>Netlify: drag the folder onto app.netlify.com/drop</li>
-            <li>Cloudflare Pages: connect a repo or direct upload</li>
-          </ul></div>
-        </div>
-      </div>
-    </section>
+
   </main>
 
   <aside id="note-panel" class="hidden">
@@ -248,6 +230,7 @@
     <div id="md-list" class="md-list" role="list"></div>
     <div class="md-foot">
       <span class="muted">Deleted notes go to your vault's <code>.trash/</code> — recoverable.</span>
+      <button id="md-merge" title="Combine the selected notes into one merged note (links are rewritten, originals trashed)">⛓ Merge selected…</button>
       <button id="md-delete" class="danger" disabled>Delete selected</button>
     </div>
   </div>

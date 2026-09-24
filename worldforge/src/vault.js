@@ -7,7 +7,7 @@ const path = require('path');
 const { extractTags, basenameNoExt, esc } = require('./md');
 const { guessTypeFromContent } = require('./types');
 
-const SKIP_DIRS = new Set(['.obsidian', '.git', '.trash', 'node_modules', '.venv', '.smart-env', 'wiki-site', '.freebuff', '.stfolder']);
+const SKIP_DIRS = new Set(['.obsidian', '.git', '.trash', 'node_modules', '.venv',  '.smart-env', '.freebuff', '.stfolder']);
 
 // AUTO-CATEGORIZE: when a note has no explicit type:, the type is guessed
 // from the note's own content (text + tags) — never from its folder name.

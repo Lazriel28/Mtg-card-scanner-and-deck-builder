@@ -7,7 +7,6 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const { scanVault } = require('./src/vault');
-const { exportSite, CSS } = require('./src/export');
 
 const ROOT = __dirname;
 const PUB = path.join(ROOT, 'public');
@@ -117,19 +116,9 @@ function apiCreateNote(title, folder, bodyText) {
   return { ok: true, id: rel };
 }
 
+// publish was removed from this app; the /api/export route is disabled
 function apiExportWiki() {
-  if (!vault) throw new Error('no vault loaded');
-  const outDir = path.join(vault.root, 'wiki-site');
-  const result = exportSite(vault, outDir);
-  // shared assets
-  fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(path.join(outDir, 'wiki.css'), CSS);
-  const vend = path.join(PUB, 'vendor');
-  for (const f of ['three.module.min.js', 'graph-common.js']) {
-    const src = path.join(vend, f);
-    if (fs.existsSync(src)) fs.copyFileSync(src, path.join(outDir, f));
-  }
-  return { ok: true, dir: outDir, pages: result.pages };
+  throw new Error('publish was removed from this app');
 }
 
 function apiPickFolder() {

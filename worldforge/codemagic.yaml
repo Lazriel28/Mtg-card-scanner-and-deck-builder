@@ -1,0 +1,136 @@
+---
+definitions:
+  vars:
+    APP_NAME: "WorldForge"
+    NODE_VERSION: 20
+    NPM_CACHE_DIR: $CM_BUILD_DIR/.npm-cache
+
+workflows:
+  build-worldforge:
+    name: Build WorldForge
+    instance_type: mac_mini_m1
+    environment:
+      vars:
+        XCODE_SIGN_INJECTION: false
+    triggers:
+      - push:
+          branches:
+            - main
+            - codemagic
+      - pull_request:
+          branches:
+            - main
+    steps:
+      - name: Checkout repository
+        app_env: []
+        scripts:
+          - name: Clone repository
+            script: |
+              set -e
+              echo "-- repo checked out by Codemagic --"
+              echo "-- branch: $CM_BRANCH --"
+
+      - name: Set up Node.js
+        group: "Setup"
+        scripts:
+          - name: Install Node
+            script: |
+              set -e
+              curl -fsSL https://fnm.r.eps.io | bash -s -- --skip-shell --yes
+              eval "$(fnm env --use-on-cd)"
+              fnm install $NODE_VERSION
+              fnm use $NODE_VERSION
+              node --version
+              npm --version
+
+      - name: Restore npm cache
+        group: "Setup"
+        scripts:
+          - name: npm cache restore
+            script: |
+              set -e
+              npm config set cache $NPM_CACHE_DIR
+              npm cache clean --force
+              echo "-- npm cache dir: $NPM_CACHE_DIR --"
+
+      - name: Install dependencies
+        group: "Dependencies"
+        scripts:
+          - name: npm install
+            script: |
+              set -e
+              npm install
+
+      - name: Run tests
+        group: "Test"
+        scripts:
+          - name: Run test suite
+            script: |
+              set -e
+              npm test
+
+      - name: Build Windows installer
+        group: "Build"
+        scripts:
+          - name: electron-builder (NSIS, x64)
+            script: |
+              set -e
+              echo "-- building Windows NSIS installer --"
+              npx electron-builder --win --x64 --config electron-builder.json 2>&1 | tail -n 30
+      - name: Package artifacts
+        group: "Artifacts"
+        scripts:
+          - name: Collect build output
+            script: |
+              set -e
+              echo "-- build artifacts --"
+              find . -maxdepth 3 -name "*.exe" -o -name "*.msi" -o -name "*.dmg" -o -name "*.zip" 2>/dev/null | sort
+              ls -la dist 2>/dev/null || true
+              ls -la build 2>/dev/null || true
+
+      - name: Publish to GitHub Releases
+        group: "Publish"
+        scripts:
+          - name: Upload installer to GitHub Release
+            script: |
+              set -e
+              if [ -z "$CM_TAG" ]; then
+                echo "-- no git tag; skipping release upload --"
+                exit 0
+              fi
+              if [ ! -f "$GITHUB_TOKEN_PATH" ]; then
+                echo "-- GitHub token not available in environment --"
+                exit 0
+              fi
+              token=$(cat "$GITHUB_TOKEN_PATH")
+              owner=$(echo "$CM_REPO_SLUG" | cut -d/ -f1)
+              repo=$(echo "$CM_REPO_SLUG" | cut -d/ -f2)
+              name="WorldForge Setup $CM_TAG"
+              # upload any installer/archive found in dist/
+              shopt -s nullglob
+              files=( dist/*.exe dist/*.msi dist/*.zip 2>/dev/null )
+              shopt -u nullglob
+              if [ ${#files[@]} -eq 0 ]; then
+                echo "-- no artifacts found in dist/ --"
+                exit 0
+              fi
+              for f in "${files[@]}"; do
+                echo "-- uploading $f to release $name --"
+                curl -fsSL \
+                  -H "Authorization: token $token" \
+                  -H "Content-Type: $(file -b --mime-type "$f")" \
+                  --data-binary "@""$f" \
+                  "https://uploads.github.com/repos/$owner/$repo/releases/assets/?name=$(basename "$f")" || {
+                    echo "upload failed for $f"; exit 1; }
+              done
+              echo "-- release assets uploaded --"
+
+      - name: Final summary
+        scripts:
+          - name: Summary
+            script: |
+              set -e
+              echo "WorldForge build complete"
+              echo "Node: $(node --version)"
+              echo "Tag: $CM_TAG"
+              echo "Repo: $CM_REPO_SLUG"

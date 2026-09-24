@@ -299,20 +299,21 @@ original returns. Tombstones older than 7 days are never resurrected.
 
 ---
 
-## 12. Publish (📖)
+## 12. Build / CI (📦)
 
-One click builds a **complete static wiki website** from your vault into a
-folder of your choosing (`wiki-site-<date>`):
+This app is built for desktop use through **Codemagic**. The repo includes a
+`codemagic.yaml` workflow that:
 
-- One page per note with all `[[wikilinks]]` resolved, plus tags, backlinks,
-  and outgoing links on every page.
-- Tag pages + a tag cloud, and a client-side note filter in the sidebar.
-- **graph.html** — an interactive, rotatable/zoomable 3D graph of the whole
-  vault, clickable through to every page.
+- checks out the source,
+- sets up Node.js,
+- installs dependencies,
+- runs the test suite,
+- builds the packaged Electron app,
+- packages build artifacts for download.
 
-**Host it free:** drag the folder onto **app.netlify.com/drop** (instant
-public URL, no account needed for a peek), or push it to GitHub Pages /
-Cloudflare Pages. Or just double-click `index.html` — it works offline.
+You do **not** need to publish anything online to use WorldForge — the app
+runs fully offline from your own files. Building the installer is only relevant
+if you want to distribute the app to other machines.
 
 ## 13. Power tools (the ⌘ button)
 

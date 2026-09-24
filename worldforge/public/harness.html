@@ -12,7 +12,7 @@
     <button class="rail-btn active" data-view="world" aria-label="World (3D graph)">🌐</button>
     <button class="rail-btn" data-view="cards" aria-label="MTG workshop">🃏</button>
     <button class="rail-btn" data-view="maps" aria-label="Maps">🗺️</button>
-    <button class="rail-btn" data-view="publish" aria-label="Publish">📖</button>
+    <button class="rail-btn" id="btn-favs" title="Favorites — your starred notes" aria-label="Favorites">⭐</button>
     <div class="rail-spacer"></div>
     <button class="rail-btn" id="btn-manual" title="Field manual" aria-label="Field manual (help)">❓</button>
     <button class="rail-btn" id="btn-vault" aria-label="Choose vault folder">📂</button>
@@ -21,6 +21,7 @@
     <section id="view-world" class="view active">
       <div class="world-hud">
         <input id="search" placeholder="Search notes…" aria-label="Search notes" autocomplete="off">
+        <div id="search-panel" class="hidden" role="listbox" aria-label="Search results"></div>
         <button id="btn-new" class="hud-btn">＋ Note</button>
         <button id="btn-import" class="hud-btn">📥 Import</button>
         <button id="btn-mass-delete" class="hud-btn" title="Delete many notes at once (goes to .trash, recoverable)">🗑 Mass delete</button>
@@ -92,7 +93,11 @@
         <div class="ov-head"><b>Vault insights</b><button id="insights-close" class="hud-btn" title="Close (Esc)">✕</button></div>
         <div id="insights-body"></div>
       </div>
-      <div id="inspector-overlay" class="hidden">
+      <div id="favs-overlay" class="hidden">
+        <div class="ov-head"><b>⭐ Favorites</b><button id="favs-close" class="hud-btn" title="Close (Esc)">✕</button></div>
+        <div id="favs-body"></div>
+      </div>
+            <div id="inspector-overlay" class="hidden">
         <div class="ov-head"><b>Vault tools</b><button id="inspector-close" class="hud-btn" title="Close (Esc)">✕</button></div>
         <div id="inspector-body"></div>
       </div>
@@ -172,30 +177,7 @@
         </div>
       </div>
     </section>
-    <section id="view-publish" class="view">
-      <div class="pub-wrap">
-        <h2>📖 Publish your wiki</h2>
-        <p class="muted">Builds a complete static website from your vault — every note, tags, backlinks,
-        search, and a 3D graph page. No accounts, no costs: open the folder as-is, or drop it on
-        GitHub Pages / Netlify / Cloudflare Pages for a free hosted wiki.</p>
-        <button id="pub-export">Build wiki site…</button>
-        <span id="pub-status" class="muted" aria-live="polite"></span>
-        <div class="pub-what">
-          <div><b>Included</b><ul>
-            <li>One page per note, wikilinks resolved</li>
-            <li>Tag pages + tag cloud</li>
-            <li>Backlinks & outgoing links per note</li>
-            <li>Client-side note filter</li>
-            <li><b>graph.html</b> — interactive 3D graph of the whole vault</li>
-          </ul></div>
-          <div><b>How to host free</b><ul>
-            <li>GitHub Pages: push the folder, enable Pages</li>
-            <li>Netlify: drag the folder onto app.netlify.com/drop</li>
-            <li>Cloudflare Pages: connect a repo or direct upload</li>
-          </ul></div>
-        </div>
-      </div>
-    </section>
+
   </main>
   <aside id="note-panel" class="hidden">
     <div class="np-head">
@@ -235,6 +217,7 @@
     <div id="md-list" class="md-list" role="list"></div>
     <div class="md-foot">
       <span class="muted">Deleted notes go to your vault's <code>.trash/</code> — recoverable.</span>
+      <button id="md-merge" title="Combine the selected notes into one merged note (links are rewritten, originals trashed)">⛓ Merge selected…</button>
       <button id="md-delete" class="danger" disabled>Delete selected</button>
     </div>
   </div>
@@ -344,7 +327,16 @@ function mtgMock() {
     renameNote: async (id, title) => { const n = window.__wfData.notes[id]; if (!n) throw new Error('missing'); const rel = (n.dir === '.' ? '' : n.dir + '/') + title + '.md'; delete window.__wfData.notes[id]; n.title = title; n.id = rel; window.__wfData.notes[rel] = n; window.__wfData.graph.nodes = window.__wfData.graph.nodes.map(x => x.id === id ? { ...x, id: rel, title } : x); return { ok: true, data: { id: rel, linksUpdated: 0, filesTouched: 0 } }; },
     moveNote: async (id, dir) => { const n = window.__wfData.notes[id]; if (!n) throw new Error('missing'); const rel = (dir ? dir + '/' : '') + n.title + '.md'; delete window.__wfData.notes[id]; n.dir = dir || '.'; n.id = rel; window.__wfData.notes[rel] = n; window.__wfData.graph.nodes = window.__wfData.graph.nodes.map(x => x.id === id ? { ...x, id: rel, dir: n.dir } : x); return { ok: true, data: { id: rel } }; },
     duplicateNote: async (id) => { const n = window.__wfData.notes[id]; if (!n) throw new Error('missing'); const rel = id.replace(/\.md$/, ' copy.md'); window.__wfData.notes[rel] = { ...n, id: rel, title: n.title + ' copy' }; window.__wfData.graph.nodes.push({ id: rel, title: n.title + ' copy', dir: n.dir, type: n.type, tags: [], size: n.raw.length, mtime: Date.now() }); return { ok: true, data: { id: rel } }; },
-    mergeNotes: async () => ({ ok: true, data: { id: 'Merged.md', linksUpdated: 0, trashed: [] } }),
+    mergeNotes: async (ids, opts) => {
+      const title = (opts && opts.title) || 'Merged';
+      const rel = title + '.md';
+      const bodies = ids.map(i => window.__wfData.notes[i] ? '## ' + window.__wfData.notes[i].title + '\n\n' + (window.__wfData.notes[i].raw || '') : '').join('\n\n');
+      window.__wfData.notes[rel] = { id: rel, title, dir: '.', type: 'untyped', raw: '# ' + title + '\n\n' + bodies, html: '<h1>' + title + '</h1>', outgoing: [], backlinks: [] };
+      window.__wfData.graph.nodes.push({ id: rel, title, dir: '.', type: 'untyped', tags: [], size: 10, mtime: Date.now() });
+      for (const i of ids) { delete window.__wfData.notes[i]; }
+      window.__wfData.graph.nodes = window.__wfData.graph.nodes.filter(n => !ids.includes(n.id));
+      return { ok: true, data: { id: rel, linksUpdated: 0, trashed: ids } };
+    },
     listTemplates: async () => ({ ok: true, data: [{ name: 'Character', file: 'x' }] }),
     getTemplate: async () => ({ ok: true, data: '# New' }),
     exportNote: async (id, format) => ({ ok: true, data: { text: (window.__wfData.notes[id] || {}).raw || '' } }),
@@ -360,19 +352,18 @@ function mtgMock() {
       for (const id of ids || []) delete l.nodes[id];
       localStorage.wfLayout = JSON.stringify(l); return { ok: true };
     },
-    // ---- maps + publish mocks (localStorage-backed) ----
+    // ---- maps mocks (localStorage-backed) ----
     mapsList: async () => { let ms = []; try { ms = JSON.parse(localStorage.wfMaps || '[]'); } catch {} return { ok: true, data: ms }; },
     mapsSave: async (ms) => { localStorage.wfMaps = JSON.stringify(ms); return { ok: true, data: ms }; },
     mapsPickImage: async () => null,
     mapsAddImage: async () => ({ ok: false, error: 'dialog unavailable in harness' }),
     mapsRemove: async (id) => { let ms = []; try { ms = JSON.parse(localStorage.wfMaps || '[]'); } catch {} ms = ms.filter(m => m.id !== id); localStorage.wfMaps = JSON.stringify(ms); return { ok: true, data: ms }; },
-    publishPickDir: async () => null,
-    publishExport: async () => ({ ok: true, data: { pages: 42, outDir: 'C:/harness/wiki-site-test' } }),
+
 
     // ---- MTG mock: tiny inline index + localStorage collection ----
     ...(mtgMock()),
   };
-  const V = 'vfeatures';
+  const V = 'vsearch1';
   const s = document.createElement('script');
   s.src = 'vendor/three.min.js';
   s.onload = () => {
