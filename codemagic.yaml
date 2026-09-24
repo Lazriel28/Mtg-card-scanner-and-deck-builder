@@ -1,6 +1,7 @@
 # Codemagic CI for MTG Codex
-# This pipeline builds the native iOS app shell from:
-#   mtg-codex/ios/MTGCodex.xcodeproj
+# This pipeline first runs the web app's engine tests, then builds the native
+# iOS app shell from mtg-codex/ios/MTGCodex.xcodeproj. If the tests fail, the
+# whole run fails and the iOS build never starts.
 #
 # First make the GitHub repo available to Codemagic:
 #   1. Push this branch (ios-ci) to GitHub.
@@ -11,12 +12,29 @@
 #
 # The bundle identifier is com.mtgcodex.app.
 
-workdir: "./mtg-codex/ios"
+workdir: "."
 
 scripts:
-  # Artifacts to keep from the build.
+  # Run the web app's engine tests first. If they fail, the whole run fails
+  # and the iOS build never starts — gating the iOS build on the web app's
+  # catalog/collection/decks/suggest logic passing.
+  - name: Run node tests
+    script: |
+      cd mtg-codex
+      node --version
+      echo '--- catalog tests ---'
+      node test/catalog.test.js
+      echo '--- engine tests ---'
+      node test/engines.test.js
+
+  # Build the native iOS app shell from the Xcode project. Runs only after the
+  # node tests above pass. Simulator build requires no signing; the device
+  # build is best-effort here (signing is configured later in Codemagic's
+  # iOS app settings when you set an Apple team).
   - name: Build iOS app
     script: |
+      set -o pipefail
+      cd mtg-codex/ios
       xcodebuild build \
         -project MTGCodex.xcodeproj \
         -scheme MTGCodex \
@@ -40,21 +58,12 @@ scripts:
         CODE_SIGNING_REQUIRED=YES \
         CODE_SIGNING_ALLOWED=YES || true
 
-  # Optional: run the existing node test suite for the web app's engines.
-  # Uncomment when you want the web app tested in CI too.
-  # - name: Run node tests
-  #   script: |
-  #     cd "../.."
-  #     node --version
-  #     node test/catalog.test.js
-  #     node test/engines.test.js
-
 artifacts:
   - name: iOS Simulator Build
     type: build
-    path: "build/Build/Products/Debug-iphonesimulator/MTGCodex.app"
+    path: "mtg-codex/ios/build/Build/Products/Debug-iphonesimulator/MTGCodex.app"
   - name: iOS Device Build
     type: build
-    path: "build/Build/Products/Debug-iphoneos/MTGCodex.app"
+    path: "mtg-codex/ios/build/Build/Products/Debug-iphoneos/MTGCodex.app"
 
 # Notifications can be turned on in the Codemagic UI for this repo.
