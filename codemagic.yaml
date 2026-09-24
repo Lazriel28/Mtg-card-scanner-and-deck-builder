@@ -3,67 +3,58 @@
 # iOS app shell from mtg-codex/ios/MTGCodex.xcodeproj. If the tests fail, the
 # whole run fails and the iOS build never starts.
 #
-# First make the GitHub repo available to Codemagic:
-#   1. Push this branch (ios-ci) to GitHub.
-#   2. In Codemagic, add the repo and enable this yaml pipeline.
-#   3. In Codemagic's iOS app settings, set the Apple team and signing
-#      identity when you want device builds to sign. Until then, the
-#      simulator build will pass without signing.
-#
 # The bundle identifier is com.mtgcodex.app.
 
 workdir: "."
 
-scripts:
-  # Run the web app's engine tests first. If they fail, the whole run fails
-  # and the iOS build never starts — gating the iOS build on the web app's
-  # catalog/collection/decks/suggest logic passing.
-  - name: Run node tests
-    script: |
-      cd mtg-codex
-      node --version
-      echo '--- catalog tests ---'
-      node test/catalog.test.js
-      echo '--- engine tests ---'
-      node test/engines.test.js
+workflows:
+  build_ios:
+    name: Build MTG Codex iOS
+    scripts:
+      # Run the web app's engine tests first. If they fail, the whole run fails
+      # and the iOS build never starts — gating the iOS build on the web app's
+      # catalog/collection/decks/suggest logic passing.
+      - name: Run node tests
+        script: |
+          cd mtg-codex
+          node --version
+          echo '--- catalog tests ---'
+          node test/catalog.test.js
+          echo '--- engine tests ---'
+          node test/engines.test.js
 
-  # Build the native iOS app shell from the Xcode project. Runs only after the
-  # node tests above pass. Simulator build requires no signing; the device
-  # build is best-effort here (signing is configured later in Codemagic's
-  # iOS app settings when you set an Apple team).
-  - name: Build iOS app
-    script: |
-      set -o pipefail
-      cd mtg-codex/ios
-      xcodebuild build \
-        -project MTGCodex.xcodeproj \
-        -scheme MTGCodex \
-        -configuration Debug \
-        -destination 'platform=iOS Simulator,name=iPhone 15' \
-        -allowProvisioningUpdates \
-        CODE_SIGN_IDENTITY="" \
-        CODE_SIGNING_REQUIRED=NO \
-        CODE_SIGNING_ALLOWED=NO
+      # Build the native iOS app shell from the Xcode project. Runs only after
+      # the node tests above pass. Simulator build requires no signing; the
+      # device build is best-effort here (signing is configured later in
+      # Codemagic's iOS app settings when you set an Apple team).
+      - name: Build iOS app
+        script: |
+          set -o pipefail
+          cd mtg-codex/ios
+          xcodebuild build \
+            -project MTGCodex.xcodeproj \
+            -scheme MTGCodex \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -allowProvisioningUpdates \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
 
-      # Also attempt a device build; signing is handled by Codemagic's
-      # iOS app settings when you link the repo and set a team.
-      xcodebuild build \
-        -project MTGCodex.xcodeproj \
-        -scheme MTGCodex \
-        -configuration Debug \
-        -destination 'generic/platform=iOS' \
-        -allowProvisioningUpdates \
-        CODE_SIGN_STYLE=Automatic \
-        CODE_SIGN_IDENTITY="Apple Distribution" \
-        CODE_SIGNING_REQUIRED=YES \
-        CODE_SIGNING_ALLOWED=YES || true
-
-artifacts:
-  - name: iOS Simulator Build
-    type: build
-    path: "mtg-codex/ios/build/Build/Products/Debug-iphonesimulator/MTGCodex.app"
-  - name: iOS Device Build
-    type: build
-    path: "mtg-codex/ios/build/Build/Products/Debug-iphoneos/MTGCodex.app"
-
-# Notifications can be turned on in the Codemagic UI for this repo.
+          # Also attempt a device build; signing is handled by Codemagic's
+          # iOS app settings when you link the repo and set a team.
+          xcodebuild build \
+            -project MTGCodex.xcodeproj \
+            -scheme MTGCodex \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -allowProvisioningUpdates \
+            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES || true
+    artifacts:
+      - path: "mtg-codex/ios/build/Build/Products/Debug-iphonesimulator/MTGCodex.app"
+        name: iOS Simulator Build
+      - path: "mtg-codex/ios/build/Build/Products/Debug-iphoneos/MTGCodex.app"
+        name: iOS Device Build
