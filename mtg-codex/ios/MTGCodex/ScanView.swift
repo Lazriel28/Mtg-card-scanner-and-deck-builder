@@ -12,6 +12,9 @@ struct ScanView: View {
     @State private var statusText = "Starting camera…"
     @State private var isProcessing = false
     @State private var message: ToastMessage?
+    @State private var manualQuery = ""
+    @State private var manualResults: [CardRecord] = []
+    @State private var manualLoading = false
 
     var body: some View {
         NavigationStack {
@@ -230,16 +233,89 @@ struct ScanView: View {
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack {
-                TextField("Card name", text: .constant(""))
+                TextField("Card name", text: $manualQuery)
                     .textFieldStyle(.roundedBorder)
-                    .disabled(true)
+                    .onSubmit { Task { await searchManual() } }
                 Button("Look up") {
-                    // In a full app this would search /api/cards/search.
-                    // For MVP we rely on the scan flow; manual lookup can be added
-                    // after the camera path is solid.
+                    Task { await searchManual() }
                 }
                 .buttonStyle(.bordered)
-                .disabled(true)
+                .disabled(manualQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || manualLoading)
+            }
+            if !manualQuery.isEmpty && !manualResults.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Tap a card to add it")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    ForEach(manualResults) { card in
+                        Button {
+                            addCardByName(card.name)
+                            manualQuery = ""
+                            manualResults = []
+                        } label: {
+                            HStack {
+                                AsyncImage(url: CodexAPI().thumbURL(for: card.name)) { phase in
+                                    switch phase {
+                                    case .success(let img): img.resizable().scaledToFill()
+                                    default: Color(.systemGray5)
+                                    }
+                                }
+                                .frame(width: 36, height: 50)
+                                .cornerRadius(6)
+                                Text(card.name)
+                                    .font(.subheadline)
+                                    .lineLimit(1)
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.vertical, 2)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if manualLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private func searchManual() async {
+        let q = manualQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return }
+        manualLoading = true
+        manualResults = []
+        defer { manualLoading = false }
+        do {
+            let cards = try await CodexAPI().searchCards(query: q, limit: 20)
+            await MainActor.run { manualResults = cards }
+        } catch let err as CodexAPIError {
+            await MainActor.run {
+                message = ToastMessage(text: err.localizedDescription, isError: true)
+            }
+        } catch {
+            await MainActor.run {
+                message = ToastMessage(text: error.localizedDescription, isError: true)
+            }
+        }
+    }
+
+    private func addCardByName(_ name: String) {
+        Task {
+            do {
+                _ = try await CodexAPI().addCard(name: name, qty: 1, condition: "NM")
+                await MainActor.run {
+                    message = ToastMessage(text: "Added \(name) to collection", isError: false)
+                }
+            } catch let err as CodexAPIError {
+                await MainActor.run {
+                    message = ToastMessage(text: err.localizedDescription, isError: true)
+                }
+            } catch {
+                await MainActor.run {
+                    message = ToastMessage(text: error.localizedDescription, isError: true)
+                }
             }
         }
     }
