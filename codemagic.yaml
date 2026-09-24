@@ -1,0 +1,60 @@
+# Codemagic CI for MTG Codex
+# This pipeline builds the native iOS app shell from:
+#   mtg-codex/ios/MTGCodex.xcodeproj
+#
+# First make the GitHub repo available to Codemagic:
+#   1. Push this branch (ios-ci) to GitHub.
+#   2. In Codemagic, add the repo and enable this yaml pipeline.
+#   3. In Codemagic's iOS app settings, set the Apple team and signing
+#      identity when you want device builds to sign. Until then, the
+#      simulator build will pass without signing.
+#
+# The bundle identifier is com.mtgcodex.app.
+
+workdir: "./mtg-codex/ios"
+
+scripts:
+  # Artifacts to keep from the build.
+  - name: Build iOS app
+    script: |
+      xcodebuild build \
+        -project MTGCodex.xcodeproj \
+        -scheme MTGCodex \
+        -configuration Debug \
+        -destination 'platform=iOS Simulator,name=iPhone 15' \
+        -allowProvisioningUpdates \
+        CODE_SIGN_IDENTITY="" \
+        CODE_SIGNING_REQUIRED=NO \
+        CODE_SIGNING_ALLOWED=NO
+
+      # Also attempt a device build; signing is handled by Codemagic's
+      # iOS app settings when you link the repo and set a team.
+      xcodebuild build \
+        -project MTGCodex.xcodeproj \
+        -scheme MTGCodex \
+        -configuration Debug \
+        -destination 'generic/platform=iOS' \
+        -allowProvisioningUpdates \
+        CODE_SIGN_STYLE=Automatic \
+        CODE_SIGN_IDENTITY="Apple Distribution" \
+        CODE_SIGNING_REQUIRED=YES \
+        CODE_SIGNING_ALLOWED=YES || true
+
+  # Optional: run the existing node test suite for the web app's engines.
+  # Uncomment when you want the web app tested in CI too.
+  # - name: Run node tests
+  #   script: |
+  #     cd "../.."
+  #     node --version
+  #     node test/catalog.test.js
+  #     node test/engines.test.js
+
+artifacts:
+  - name: iOS Simulator Build
+    type: build
+    path: "build/Build/Products/Debug-iphonesimulator/MTGCodex.app"
+  - name: iOS Device Build
+    type: build
+    path: "build/Build/Products/Debug-iphoneos/MTGCodex.app"
+
+# Notifications can be turned on in the Codemagic UI for this repo.

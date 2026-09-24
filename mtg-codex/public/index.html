@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12100e">
+  <title>MTG Codex</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🜛</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">MTG <span>Codex</span></div>
+    <nav class="tabs" id="nav">
+      <a href="#scan" data-view="scan">📷 Scan</a>
+      <a href="#collection" data-view="collection">🗂 Collection</a>
+      <a href="#decks" data-view="decks">🃏 Decks</a>
+      <a href="#suggest" data-view="suggest">✨ Suggest</a>
+    </nav>
+    <div class="topbar-status" id="topbar-status"></div>
+  </header>
+
+  <div id="sync-banner" class="sync-banner hidden"></div>
+
+  <main id="main">
+    <section id="view-scan" class="view"></section>
+    <section id="view-collection" class="view hidden"></section>
+    <section id="view-decks" class="view hidden"></section>
+    <section id="view-suggest" class="view hidden"></section>
+  </main>
+
+  <div id="toast-holder"></div>
+  <div id="modal-holder"></div>
+
+  <script src="scan.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
