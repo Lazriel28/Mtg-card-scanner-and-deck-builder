@@ -17,14 +17,28 @@ struct RootView: View {
                     Label("Collection", systemImage: "tray.full")
                 }
                 .tag(1)
+            DecksView()
+                .tabItem {
+                    Label("Decks", systemImage: "rectangle.stack.fill")
+                }
+                .tag(2)
+            SuggestView()
+                .tabItem {
+                    Label("Suggest", systemImage: "wand.and.stars")
+                }
+                .tag(3)
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape.fill")
                 }
-                .tag(2)
+                .tag(4)
         }
     }
 }
+
+// MARK: - decks + suggest
+
+// (DecksView.swift, SuggestView.swift)
 
 // MARK: - settings / server config
 

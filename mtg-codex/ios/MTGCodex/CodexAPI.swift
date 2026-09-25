@@ -167,6 +167,65 @@ struct CardRecord: Codable {
     let released: String?
 }
 
+// MARK: - decks + suggest
+
+struct DeckRecord: Codable, Identifiable {
+    let id: Int
+    let name: String
+    let format: String
+    let formatLabel: String
+    let commander: [String]?
+    let cards: [DeckCard]
+    let sideboard: [DeckCard]
+    let size: Int
+    let stats: DeckStats
+    let notes: String
+    let updated: Int?
+}
+
+struct DeckCard: Codable, Identifiable {
+    let name: String
+    let qty: Int
+    var id: String { name.lowercased() }
+}
+
+struct DeckStats: Codable {
+    let curve: [String: Int]
+    let lands: Int
+    let avgCmc: Double
+    let colors: [String: Int]
+}
+
+struct SuggestRequest: Codable {
+    let format: String?
+    let colors: [String]?
+}
+
+struct SuggestResponse: Codable {
+    let format: String
+    let colors: [String]
+    let deck: [DeckCard]
+    let stats: SuggestStats
+    let notes: [String]
+}
+
+struct SuggestStats: Codable {
+    let size: Int
+    let targetSize: Int
+    let lands: Int
+    let avgCmc: Double
+    let colors: [String: Int]
+}
+
+struct SuggestRecordRequest: Codable {
+    let deck: [DeckCard]
+    let colors: [String]
+}
+
+struct SuggestRecordResponse: Codable {
+    let ok: Bool
+}
+
 // MARK: - API client
 
 final class CodexAPI {
@@ -258,6 +317,26 @@ final class CodexAPI {
     func photoURL(for filename: String) -> URL {
         return baseURL.appendingPathComponent("/api/photos/\(filename)")
     }
+
+    // MARK: decks
+
+    func decks() async throws -> [DeckRecord] {
+        return try await jsonGet("/api/decks", [DeckRecord].self)
+    }
+
+    func deleteDeck(id: Int) async throws {
+        let _: SuggestRecordResponse = try await jsonPost("/api/decks/\(id)", body: EmptyBody(), as: SuggestRecordResponse.self)
+    }
+
+    // MARK: suggest
+
+    func suggest(format: String?, colors: [String]?) async throws -> SuggestResponse {
+        return try await jsonPost("/api/suggest", body: SuggestRequest(format: format, colors: colors), as: SuggestResponse.self)
+    }
+
+    func recordSuggestion(deck: [DeckCard], colors: [String]) async throws {
+        let _: SuggestRecordResponse = try await jsonPost("/api/suggest/record", body: SuggestRecordRequest(deck: deck, colors: colors), as: SuggestRecordResponse.self)
+    }
 }
 
 // MARK: - low-level helpers
@@ -318,3 +397,5 @@ private extension CodexAPI {
         }
     }
 }
+
+private struct EmptyBody: Encodable {}
